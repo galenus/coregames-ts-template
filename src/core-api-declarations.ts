@@ -26,7 +26,7 @@ export interface Constant {
 export interface Constructor {
     Name:        Name;
     Description: string;
-    Signatures:  Function[];
+    Signatures:  Signature[];
 }
 
 export enum Name {
@@ -75,11 +75,10 @@ export interface Event extends DescribableDeprecatable {
 
 export interface Function extends DescribableDeprecatable {
     Name:                string;
-    Parameters?:         Parameter[];
-    Returns?:            Parameter[];
+    // Parameters?:         Parameter[];
+    // Returns?:            Parameter[];
+    Signatures:         Signature[];
     Tags?:               Tag[];
-    Signatures?:         Signature[];
-    Type?:               string;
 }
 
 export interface Signature extends DescribableDeprecatable {

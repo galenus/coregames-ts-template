@@ -1,6 +1,6 @@
 import fs from "fs";
 import axios from "axios";
-import { Class, CoreAPI, DescribableDeprecatable, Parameter, Tag, Function } from "./core-api-declarations";
+import { Class, CoreAPI, DescribableDeprecatable, Parameter, Tag, Function, Signature } from "./core-api-declarations";
 
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
@@ -121,7 +121,7 @@ function mapType(type?: string): string {
     return type;
 }
 
-type Callable = Pick<Function, "Parameters" | "Returns">;
+type Callable = Partial<Pick<Signature, "Parameters" | "Returns">>;
 
 function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
     const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${p.Name}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
@@ -151,7 +151,6 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
             .type(`declare interface ${currentClass.Name}${classExtendsClause} {`)
             .addDescriptionAndDeprecationFor(currentClass);
 
-
         const propertiesSection = classBlock.section("PROPERTIES", true);
         for (const field of currentClass.Properties) {
             propertiesSection
@@ -166,6 +165,20 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
                 .section()
                 .add(`readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`)
                 .addDescriptionAndDeprecationFor(event);
+        }
+
+        const methodsSection = classBlock.section("INSTANCE METHODS", true);
+        for (const memberFunction of currentClass.MemberFunctions) {
+            for (const signature of memberFunction.Signatures) {
+                methodsSection
+                    .section()
+                    .add(`${memberFunction.Name}${buildSignature(signature)};`)
+                    .addDescriptionAndDeprecationFor({
+                        Description: signature.Description ?? memberFunction.Description,
+                        IsDeprecated: signature.IsDeprecated ?? memberFunction.IsDeprecated,
+                        DeprecationMessage: signature.DeprecationMessage ?? memberFunction.DeprecationMessage,
+                    });
+            }
         }
 
         if (!!currentClass.Constants || !!currentClass.StaticFunctions) {
