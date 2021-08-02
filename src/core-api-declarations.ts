@@ -13,7 +13,7 @@ export interface Class {
     Events?:          Event[];
     Constructors?:    Constructor[];
     Constants?:       Constant[];
-    StaticFunctions?: Hook[];
+    StaticFunctions?: Function[];
     Hooks?:           Hook[];
 }
 

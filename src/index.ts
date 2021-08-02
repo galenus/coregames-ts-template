@@ -1,6 +1,6 @@
 import fs from "fs";
 import axios from "axios";
-import { Class, CoreAPI, DescribableDeprecatable, Parameter, Tag, Function, Signature } from "./core-api-declarations";
+import { Class, CoreAPI, DescribableDeprecatable, Function, Parameter, Signature, Tag } from "./core-api-declarations";
 
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
@@ -115,6 +115,7 @@ const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";
 function mapType(type?: string): string {
     switch (type) {
         case "integer": return INTEGER_TYPE_NAME;
+        case "function": return "(...args: any[]) => void";
         case undefined: return "any";
     }
 
@@ -123,8 +124,14 @@ function mapType(type?: string): string {
 
 type Callable = Partial<Pick<Signature, "Parameters" | "Returns">>;
 
+function getName(p: Parameter) {
+    if (p.Name === "function") return "func";
+
+    return p.Name?.replace(/ /g, "_");
+}
+
 function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
-    const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${p.Name}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
+    const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
     const returnDefs = Returns?.map(r => `${r.IsOptional ? OPTIONAL_TYPE_NAME + "<" : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]": ""}`);
 
     const invocation = `(${parameterDefs?.join(", ") ?? ""})`;
@@ -139,6 +146,21 @@ function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
     }
 
     return `${invocation}${isLambda ? " => " : ": "}${returnType}`;
+}
+
+function processFunctions(functions: Function[], functionsSection: CodeBlock) {
+    for (const func of functions) {
+        for (const signature of func.Signatures) {
+            functionsSection
+                .section()
+                .add(`${func.Name}${buildSignature(signature)};`)
+                .addDescriptionAndDeprecationFor({
+                    Description: signature.Description ?? func.Description,
+                    IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
+                    DeprecationMessage: signature.DeprecationMessage ?? func.DeprecationMessage
+                });
+        }
+    }
 }
 
 function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock) {
@@ -167,19 +189,7 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
                 .addDescriptionAndDeprecationFor(event);
         }
 
-        const methodsSection = classBlock.section("INSTANCE METHODS", true);
-        for (const memberFunction of currentClass.MemberFunctions) {
-            for (const signature of memberFunction.Signatures) {
-                methodsSection
-                    .section()
-                    .add(`${memberFunction.Name}${buildSignature(signature)};`)
-                    .addDescriptionAndDeprecationFor({
-                        Description: signature.Description ?? memberFunction.Description,
-                        IsDeprecated: signature.IsDeprecated ?? memberFunction.IsDeprecated,
-                        DeprecationMessage: signature.DeprecationMessage ?? memberFunction.DeprecationMessage,
-                    });
-            }
-        }
+        processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
 
         if (!!currentClass.Constants || !!currentClass.StaticFunctions) {
             const staticTypeName = `${currentClass.Name}Static`;
@@ -192,6 +202,8 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
                     .add(`readonly ${constant.Name}: ${mapType(constant.Type)};`)
                     .addDescriptionAndDeprecationFor(constant);
             }
+
+            processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true));
 
             fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`)
         }
