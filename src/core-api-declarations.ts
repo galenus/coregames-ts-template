@@ -9,7 +9,7 @@ export interface Class {
     Description:      string;
     BaseType?:        string;
     Properties:       Property[];
-    MemberFunctions:  Event[];
+    MemberFunctions:  Function[];
     Events?:          Event[];
     Constructors?:    Constructor[];
     Constants?:       Constant[];
@@ -26,47 +26,30 @@ export interface Constant {
 export interface Constructor {
     Name:        Name;
     Description: string;
-    Signatures:  Hook[];
+    Signatures:  Function[];
 }
 
 export enum Name {
     New = "New",
 }
 
-export interface Hook {
-    Returns?:     HookReturn[];
-    Parameters?:  HookParameter[];
+export interface DescribableDeprecatable {
+    Description?:        string;
+    IsDeprecated?:       boolean;
+    DeprecationMessage?: string;
+}
+
+export interface Hook extends DescribableDeprecatable {
     Name?:        string;
-    Description?: string;
+    Returns?:     Parameter[];
+    Parameters?:  Parameter[];
     Tags?:        Tag[];
-    Signatures?:  HookSignature[];
-}
-
-export interface HookParameter {
-    Type: string;
-    Name: string;
-}
-
-export interface HookReturn {
-    Type: string;
-}
-
-export interface HookSignature {
-    Returns:      PurpleReturn[];
-    Parameters:   Parameter[];
-    Name?:        string;
-    Description?: string;
+    Signatures?:  Signature[];
 }
 
 export interface Parameter {
     Type?:       string;
     Name?:       string;
-    IsOptional?: boolean;
-    IsVariadic?: boolean;
-}
-
-export interface PurpleReturn {
-    Type?:       string;
     IsOptional?: boolean;
     IsVariadic?: boolean;
 }
@@ -79,12 +62,6 @@ export enum Tag {
     ServerOnly = "ServerOnly",
 }
 
-export interface DescribableDeprecatable {
-    Description?:        string;
-    IsDeprecated?:       boolean;
-    DeprecationMessage?: string;
-}
-
 export interface Property extends DescribableDeprecatable {
     Name:                string;
     Type:                string;
@@ -93,39 +70,33 @@ export interface Property extends DescribableDeprecatable {
 
 export interface Event extends DescribableDeprecatable {
     Name:                string;
-    Parameters?:         EventParameter[];
+    Parameters?:         Parameter[];
+}
+
+export interface Function extends DescribableDeprecatable {
+    Name:                string;
+    Parameters?:         Parameter[];
+    Returns?:            Parameter[];
     Tags?:               Tag[];
-    Signatures?:         EventSignature[];
+    Signatures?:         Signature[];
     Type?:               string;
 }
 
-export interface EventParameter {
-    Type:        string;
-    Name:        string;
-    IsOptional?: boolean;
-}
-
-export interface EventSignature {
+export interface Signature extends DescribableDeprecatable {
     Returns:             Parameter[];
     Parameters:          Parameter[];
     Name?:               string;
-    Description?:        string;
-    IsDeprecated?:       boolean;
-    DeprecationMessage?: string;
 }
 
 export interface Enum {
     Name:        string;
     Description: string;
-    Values:      Value[];
+    Values:      EnumValue[];
 }
 
-export interface Value {
+export interface EnumValue extends DescribableDeprecatable {
     Name:                string;
-    Description?:        string;
     Value:               number;
-    IsDeprecated?:       boolean;
-    DeprecationMessage?: string;
 }
 
 export interface Namespace {

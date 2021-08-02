@@ -1,6 +1,6 @@
 import fs from "fs";
 import axios from "axios";
-import { Class, CoreAPI, DescribableDeprecatable, Tag } from "./core-api-declarations";
+import { Class, CoreAPI, DescribableDeprecatable, Parameter, Tag, Function } from "./core-api-declarations";
 
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
@@ -108,13 +108,37 @@ class CodeBlock {
 }
 
 const INTEGER_TYPE_NAME = "Integer";
+const EVENT_TYPE_NAME = "Event";
+const OPTIONAL_TYPE_NAME = "Optional";
+const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";
 
-function mapType(type: string): string {
+function mapType(type?: string): string {
     switch (type) {
         case "integer": return INTEGER_TYPE_NAME;
+        case undefined: return "any";
     }
 
     return type;
+}
+
+type Callable = Pick<Function, "Parameters" | "Returns">;
+
+function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
+    const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${p.Name}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
+    const returnDefs = Returns?.map(r => `${r.IsOptional ? OPTIONAL_TYPE_NAME + "<" : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]": ""}`);
+
+    const invocation = `(${parameterDefs?.join(", ") ?? ""})`;
+
+    let returnType;
+    if (!returnDefs?.length) {
+        returnType = "void";
+    } else if (returnDefs.length === 1) {
+        returnType = returnDefs[0];
+    } else {
+        returnType = `${MULTI_RETURN_TYPE_NAME}<[${returnDefs.join(", ")}]>`;
+    }
+
+    return `${invocation}${isLambda ? " => " : ": "}${returnType}`;
 }
 
 function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock) {
@@ -134,6 +158,14 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
                 .section()
                 .add(`${field.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${field.Name}: ${mapType(field.Type)};`)
                 .addDescriptionAndDeprecationFor(field);
+        }
+
+        const eventsSection = classBlock.section("EVENTS", true);
+        for (const event of currentClass.Events ?? []) {
+            eventsSection
+                .section()
+                .add(`readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`)
+                .addDescriptionAndDeprecationFor(event);
         }
 
         if (!!currentClass.Constants || !!currentClass.StaticFunctions) {
@@ -157,6 +189,9 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
 
 function addCommonTypes(fileCode: CodeBlock) {
     fileCode.type(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
+    fileCode.type(`declare type ${EVENT_TYPE_NAME}<THandler> = { Connect(handler: THandler): void };`, false);
+    fileCode.type(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
+    fileCode.type(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false)
     return fileCode;
 }
 
