@@ -8,7 +8,7 @@ export interface Class {
     Name:             string;
     Description:      string;
     BaseType?:        string;
-    Properties:       Event[];
+    Properties:       Property[];
     MemberFunctions:  Event[];
     Events?:          Event[];
     Constructors?:    Constructor[];
@@ -79,13 +79,22 @@ export enum Tag {
     ServerOnly = "ServerOnly",
 }
 
-export interface Event {
-    Name:                string;
+export interface DescribableDeprecatable {
     Description?:        string;
-    Parameters?:         EventParameter[];
-    Tags?:               Tag[];
     IsDeprecated?:       boolean;
     DeprecationMessage?: string;
+}
+
+export interface Property extends DescribableDeprecatable {
+    Name:                string;
+    Type:                string;
+    Tags?:               Tag[];
+}
+
+export interface Event extends DescribableDeprecatable {
+    Name:                string;
+    Parameters?:         EventParameter[];
+    Tags?:               Tag[];
     Signatures?:         EventSignature[];
     Type?:               string;
 }

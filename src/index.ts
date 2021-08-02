@@ -1,5 +1,6 @@
+import fs from "fs";
 import axios from "axios";
-import { CoreAPI, Class, Name } from "./core-api-declarations";
+import { Class, CoreAPI, DescribableDeprecatable, Tag } from "./core-api-declarations";
 
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
@@ -29,15 +30,18 @@ class CodeBlock {
     private readonly code: (string | CodeBlock)[] = [];
 
     constructor(
-        private readonly prefix: string = "",
+        private readonly contentPrefix: string = "",
         private readonly firstLine?: string,
         private readonly lastLine?: string,
+        private readonly wrapWithNewLines?: boolean,
+        private readonly removeEmpty?: boolean,
     ) {
         if (!!firstLine) this.code.push(firstLine);
     }
 
-    add(...codeLines: string[]) {
-        this.code.push(...codeLines.map(l => `${this.prefix}${l}`));
+    add(...codeLines: (string | false)[]) {
+        this.code.push(...codeLines.filter(item => !!item).map(l => l + ""));
+        return this;
     }
 
     comment() {
@@ -50,44 +54,109 @@ class CodeBlock {
         return commentBlock;
     }
 
-    type(typeDeclaration: string, lastTypeLine: string = "}") {
-        const typeBlock = new CodeBlock(this.prefix + TAB, typeDeclaration, lastTypeLine);
+    section(name?: string, wrapWithNewLines = false) {
+        const section = new CodeBlock("", name && `// ${name}` || undefined, undefined, wrapWithNewLines, true);
+        this.code.push(section);
+        return section;
+    }
+
+    type(typeDeclaration: string, lastTypeLine: string | false = "}") {
+        const typeBlock = new CodeBlock(TAB, typeDeclaration, lastTypeLine || undefined, true);
         this.code.push(typeBlock);
 
         return typeBlock;
     }
 
-    getLines(): string[] {
+    addDescriptionAndDeprecationFor({ Description, DeprecationMessage, IsDeprecated }: DescribableDeprecatable) {
+        if (!Description && !IsDeprecated) return this;
+
+        this.comment()
+            .add(Description ?? false)
+            .add(IsDeprecated ? `@deprecated ${DeprecationMessage ?? ""}` : false);
+
+        return this;
+    }
+
+    getCodeLines(): string[] {
+        if (this.removeEmpty && this.code.length === 1 && this.code[0] === this.firstLine) {
+            return [];
+        }
+
         return [
+            ...!!this.wrapWithNewLines ? [""]: [],
             ...this.code.flatMap(code => {
-                if (code instanceof CodeBlock) {
-                    return code.getLines();
+                if (code === this.firstLine) {
+                    return [code];
                 }
 
-                return code.split("\n").map(line => line.replace(/^\r|\r$/g, ""));
+                if (code instanceof CodeBlock) {
+                    return code.getCodeLines().map(line => this.contentPrefix + line);
+                }
+
+                return code.split("\n")
+                    .map(line => line.replace(/^\r|\r$/g, ""))
+                    .map(line => this.contentPrefix + line);
             }),
-            ... !!this.lastLine ? [this.lastLine] : [],
+            ...!!this.lastLine ? [this.lastLine] : [],
+            ...!!this.wrapWithNewLines ? [""]: []
         ];
     }
 
     toString() {
-        return this.getLines().join("\n");
+        return this.getCodeLines().join("\n");
     }
 }
 
-function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock = new CodeBlock()) {
+const INTEGER_TYPE_NAME = "Integer";
+
+function mapType(type: string): string {
+    switch (type) {
+        case "integer": return INTEGER_TYPE_NAME;
+    }
+
+    return type;
+}
+
+function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock) {
     let currentClass: Class | false;
     while (!!(currentClass = retrieveNextItem(classes, classNames))) {
         const classExtendsClause = currentClass.BaseType && currentClass.BaseType !== OBJECT_CLASS_NAME
             ? ` extends ${currentClass.BaseType}`
             : "";
-        const classBlock = fileCode.type(`declare interface ${currentClass.Name}${classExtendsClause} {`)
+        const classBlock = fileCode
+            .type(`declare interface ${currentClass.Name}${classExtendsClause} {`)
+            .addDescriptionAndDeprecationFor(currentClass);
 
-        if (!!currentClass.Description) {
-            classBlock.comment().add(currentClass.Description);
+
+        const propertiesSection = classBlock.section("PROPERTIES", true);
+        for (const field of currentClass.Properties) {
+            propertiesSection
+                .section()
+                .add(`${field.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${field.Name}: ${mapType(field.Type)};`)
+                .addDescriptionAndDeprecationFor(field);
+        }
+
+        if (!!currentClass.Constants || !!currentClass.StaticFunctions) {
+            const staticTypeName = `${currentClass.Name}Static`;
+            const staticClassBlock = fileCode.type(`declare interface ${staticTypeName} {`);
+
+            const constantsSection = staticClassBlock.section("CONSTANTS", true);
+            for (const constant of currentClass?.Constants ?? []) {
+                constantsSection
+                    .section()
+                    .add(`readonly ${constant.Name}: ${mapType(constant.Type)};`)
+                    .addDescriptionAndDeprecationFor(constant);
+            }
+
+            fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`)
         }
     }
 
+    return fileCode;
+}
+
+function addCommonTypes(fileCode: CodeBlock) {
+    fileCode.type(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
     return fileCode;
 }
 
@@ -99,12 +168,15 @@ async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI) {
         }),
         {classes: {} as Record<string, Class>, classNames: [] as string[]}
     );
-    const fileCode = processClasses(classes, classNames);
+    let fileCode = new CodeBlock();
+    fileCode = addCommonTypes(fileCode);
+    fileCode = processClasses(classes, classNames, fileCode);
 
     return fileCode;
 }
 
 loadApiDefinitions()
     .then(processCoreApi)
-    .then(result => console.log("Done!\n", result.toString()))
+    .then(result => fs.writeFileSync("./generated-definitions.d.ts", result.toString()))
+    .then(() => console.log("Done!"))
     .catch(e => console.error("Failed with an error:", e));
