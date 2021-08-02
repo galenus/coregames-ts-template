@@ -23,9 +23,8 @@ export interface Constant {
     Type:        string;
 }
 
-export interface Constructor {
+export interface Constructor extends DescribableDeprecatable {
     Name:        Name;
-    Description: string;
     Signatures:  Signature[];
 }
 

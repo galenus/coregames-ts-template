@@ -191,12 +191,14 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
 
         processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
 
-        if (!!currentClass.Constants || !!currentClass.StaticFunctions) {
+        if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
             const staticTypeName = `${currentClass.Name}Static`;
             const staticClassBlock = fileCode.type(`declare interface ${staticTypeName} {`);
 
+            processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true));
+
             const constantsSection = staticClassBlock.section("CONSTANTS", true);
-            for (const constant of currentClass?.Constants ?? []) {
+            for (const constant of currentClass.Constants ?? []) {
                 constantsSection
                     .section()
                     .add(`readonly ${constant.Name}: ${mapType(constant.Type)};`)
