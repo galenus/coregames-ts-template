@@ -14,7 +14,8 @@
   "main": "dist/index.js",
   "scripts": {
     "prebundle": "rimraf dist",
-    "bundle": "microbundle --no-pkg-main -f cjs --generate-types"
+    "bundle": "microbundle --no-pkg-main -f cjs --generate-types",
+    "start": "nodemon --inspect src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^16.4.10",
