@@ -131,6 +131,7 @@ function mapType(type?: string): string {
     switch (type) {
         case "integer": return INTEGER_TYPE_NAME;
         case "function": return "(...args: any[]) => void";
+        case "table": return "Record<string, any>";
         case undefined: return "any";
     }
 
@@ -195,6 +196,12 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
             currentClass.Events ?? [],
             event => `readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`
         );
+
+    classBlock.section("HOOKS", true)
+        .addDefinitionLines(
+            currentClass.Hooks ?? [],
+            hook => `readonly ${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, true)}>;`
+        )
 
     processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
 

@@ -100,7 +100,7 @@ export interface EnumValue extends DescribableDeprecatable {
 export interface Namespace {
     Name:            string;
     Description:     string;
-    StaticFunctions: Hook[];
+    StaticFunctions: Function[];
     StaticHooks?:    Hook[];
     StaticEvents?:   Event[];
 }
