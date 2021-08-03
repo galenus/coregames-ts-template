@@ -1,31 +1,31 @@
 export interface CoreAPI {
-    Classes:    Class[];
+    Classes: Class[];
     Namespaces: Namespace[];
-    Enums:      Enum[];
+    Enums: Enum[];
 }
 
 export interface Class {
-    Name:             string;
-    Description:      string;
-    BaseType?:        string;
-    Properties:       Property[];
-    MemberFunctions:  Function[];
-    Events?:          Event[];
-    Constructors?:    Constructor[];
-    Constants?:       Constant[];
+    Name: string;
+    Description: string;
+    BaseType?: string;
+    Properties: Property[];
+    MemberFunctions: Function[];
+    Events?: Event[];
+    Constructors?: Constructor[];
+    Constants?: Constant[];
     StaticFunctions?: Function[];
-    Hooks?:           Hook[];
+    Hooks?: Hook[];
 }
 
 export interface Constant {
-    Name:        string;
+    Name: string;
     Description: string;
-    Type:        string;
+    Type: string;
 }
 
 export interface Constructor extends DescribableDeprecatable {
-    Name:        Name;
-    Signatures:  Signature[];
+    Name: Name;
+    Signatures: Signature[];
 }
 
 export enum Name {
@@ -33,22 +33,22 @@ export enum Name {
 }
 
 export interface DescribableDeprecatable {
-    Description?:        string;
-    IsDeprecated?:       boolean;
+    Description?: string;
+    IsDeprecated?: boolean;
     DeprecationMessage?: string;
 }
 
 export interface Hook extends DescribableDeprecatable {
-    Name?:        string;
-    Returns?:     Parameter[];
-    Parameters?:  Parameter[];
-    Tags?:        Tag[];
-    Signatures?:  Signature[];
+    Name?: string;
+    Returns?: Parameter[];
+    Parameters?: Parameter[];
+    Tags?: Tag[];
+    Signatures?: Signature[];
 }
 
 export interface Parameter {
-    Type?:       string;
-    Name?:       string;
+    Type?: string;
+    Name?: string;
     IsOptional?: boolean;
     IsVariadic?: boolean;
 }
@@ -62,45 +62,45 @@ export enum Tag {
 }
 
 export interface Property extends DescribableDeprecatable {
-    Name:                string;
-    Type:                string;
-    Tags?:               Tag[];
+    Name: string;
+    Type: string;
+    Tags?: Tag[];
 }
 
 export interface Event extends DescribableDeprecatable {
-    Name:                string;
-    Parameters?:         Parameter[];
+    Name: string;
+    Parameters?: Parameter[];
 }
 
 export interface Function extends DescribableDeprecatable {
-    Name:                string;
+    Name: string;
     // Parameters?:         Parameter[];
     // Returns?:            Parameter[];
-    Signatures:         Signature[];
-    Tags?:               Tag[];
+    Signatures: Signature[];
+    Tags?: Tag[];
 }
 
 export interface Signature extends DescribableDeprecatable {
-    Returns:             Parameter[];
-    Parameters:          Parameter[];
-    Name?:               string;
+    Returns: Parameter[];
+    Parameters: Parameter[];
+    Name?: string;
 }
 
 export interface Enum {
-    Name:        string;
+    Name: string;
     Description: string;
-    Values:      EnumValue[];
+    Values: EnumValue[];
 }
 
 export interface EnumValue extends DescribableDeprecatable {
-    Name:                string;
-    Value:               number;
+    Name: string;
+    Value: number;
 }
 
 export interface Namespace {
-    Name:            string;
-    Description:     string;
+    Name: string;
+    Description: string;
     StaticFunctions: Function[];
-    StaticHooks?:    Hook[];
-    StaticEvents?:   Event[];
+    StaticHooks?: Hook[];
+    StaticEvents?: Event[];
 }

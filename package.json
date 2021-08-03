@@ -13,12 +13,18 @@
   "source": "src/index.ts",
   "main": "dist/index.js",
   "scripts": {
-    "prebundle": "rimraf dist",
+    "lint": "eslint . --ext ts --fix",
+    "prebundle": "rimraf dist && npm run lint",
     "bundle": "microbundle --no-pkg-main -f cjs --generate-types",
     "start": "nodemon --inspect src/index.ts"
   },
   "devDependencies": {
     "@types/node": "^16.4.10",
+    "@typescript-eslint/eslint-plugin": "^4.29.0",
+    "@typescript-eslint/parser": "^4.29.0",
+    "eslint": "^7.32.0",
+    "eslint-config-airbnb-typescript": "^12.3.1",
+    "eslint-plugin-import": "^2.23.4",
     "microbundle": "^0.13.3",
     "nodemon": "^2.0.12",
     "rimraf": "^3.0.2",

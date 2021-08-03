@@ -11,7 +11,7 @@ import {
     Hook,
     Event,
     Tag,
-    Enum
+    Enum,
 } from "./core-api-declarations";
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
@@ -35,11 +35,11 @@ class CodeBlock {
         private readonly wrapWithNewLines?: boolean,
         private readonly removeEmpty?: boolean,
     ) {
-        if (!!firstLine) this.code.push(firstLine);
+        if (firstLine) this.code.push(firstLine);
     }
 
     add(...codeLines: (string | false)[]) {
-        this.code.push(...codeLines.filter(item => !!item).map(l => l + ""));
+        this.code.push(...codeLines.filter(item => !!item).map(l => `${l}`));
         return this;
     }
 
@@ -54,7 +54,7 @@ class CodeBlock {
     }
 
     section(name?: string, wrapWithNewLines = false) {
-        const section = new CodeBlock("", name && `// ${name}` || undefined, undefined, wrapWithNewLines, true);
+        const section = new CodeBlock("", typeof name === "string" ? `// ${name}` : undefined, undefined, wrapWithNewLines, true);
         this.code.push(section);
         return section;
     }
@@ -85,10 +85,7 @@ class CodeBlock {
     }
 
     addDefinitionLines<T extends DescribableDeprecatable>(definitions: T[], toDeclarationLine: (def: T) => string) {
-        for (const definition of definitions) {
-            this.addDefinitionLine(toDeclarationLine(definition), definition);
-        }
-
+        definitions.forEach(definition => this.addDefinitionLine(toDeclarationLine(definition), definition));
         return this;
     }
 
@@ -98,7 +95,7 @@ class CodeBlock {
         }
 
         return [
-            ...!!this.wrapWithNewLines ? [""]: [],
+            ...this.wrapWithNewLines ? [""] : [],
             ...this.code.flatMap(code => {
                 if (code === this.firstLine) {
                     return [code];
@@ -112,8 +109,8 @@ class CodeBlock {
                     .map(line => line.replace(/^\r|\r$/g, ""))
                     .map(line => this.contentPrefix + line);
             }),
-            ...!!this.lastLine ? [this.lastLine] : [],
-            ...!!this.wrapWithNewLines ? [""]: []
+            ...this.lastLine ? [this.lastLine] : [],
+            ...this.wrapWithNewLines ? [""] : [],
         ];
     }
 
@@ -132,9 +129,8 @@ function mapType(type?: string): string {
         case "function": return "(...args: any[]) => void";
         case "table": return "Record<string, any>";
         case undefined: return "any";
+        default: return type;
     }
-
-    return type;
 }
 
 type Callable = Partial<Pick<Signature, "Parameters" | "Returns">>;
@@ -147,7 +143,7 @@ function getName(p: Parameter) {
 
 function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
     const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
-    const returnDefs = Returns?.map(r => `${r.IsOptional ? OPTIONAL_TYPE_NAME + "<" : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]": ""}`);
+    const returnDefs = Returns?.map(r => `${r.IsOptional ? `${OPTIONAL_TYPE_NAME}<` : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]" : ""}`);
 
     const invocation = `(${parameterDefs?.join(", ") ?? ""})`;
 
@@ -155,7 +151,7 @@ function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
     if (!returnDefs?.length) {
         returnType = "void";
     } else if (returnDefs.length === 1) {
-        returnType = returnDefs[0];
+        [returnType] = returnDefs;
     } else {
         returnType = `${MULTI_RETURN_TYPE_NAME}<[${returnDefs.join(", ")}]>`;
     }
@@ -164,8 +160,8 @@ function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
 }
 
 function processFunctions(functions: Function[], functionsSection: CodeBlock, declarationPrefix = "") {
-    for (const func of functions) {
-        for (const signature of func.Signatures) {
+    functions.forEach(func => {
+        func.Signatures.forEach(signature => {
             functionsSection
                 .section()
                 .addDefinitionLine(
@@ -173,11 +169,11 @@ function processFunctions(functions: Function[], functionsSection: CodeBlock, de
                     {
                         Description: signature.Description ?? func.Description,
                         IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
-                        DeprecationMessage: signature.DeprecationMessage ?? func.DeprecationMessage
-                    }
+                        DeprecationMessage: signature.DeprecationMessage ?? func.DeprecationMessage,
+                    },
                 );
-        }
-    }
+        });
+    });
 }
 
 const EVENT_TYPE_NAME = "Event";
@@ -194,20 +190,20 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
     classBlock.section("PROPERTIES", true)
         .addDefinitionLines(
             currentClass.Properties,
-            prop => `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mapType(prop.Type)};`
+            prop => `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mapType(prop.Type)};`,
         );
 
     classBlock.section("EVENTS", true)
         .addDefinitionLines(
             currentClass.Events ?? [],
-            event => `readonly ${buildTypedEvent(event)};`
+            event => `readonly ${buildTypedEvent(event)};`,
         );
 
     classBlock.section("HOOKS", true)
         .addDefinitionLines(
             currentClass.Hooks ?? [],
-            hook => `readonly ${buildTypedHook(hook)};`
-        )
+            hook => `readonly ${buildTypedHook(hook)};`,
+        );
 
     processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
 
@@ -218,7 +214,7 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
         staticClassBlock.section("CONSTANTS", true)
             .addDefinitionLines(
                 currentClass.Constants ?? [],
-                constant => `readonly ${constant.Name}: ${mapType(constant.Type)};`
+                constant => `readonly ${constant.Name}: ${mapType(constant.Type)};`,
             );
 
         processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true));
@@ -247,12 +243,12 @@ function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
                     Parameters: [
                         ...connectFuncParams.slice(0, connectFuncHandlerParamIndex),
                         { Name: "listener", Type: HANDLER_TYPE_NAME },
-                        ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1)
-                    ]
-                }]
+                        ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1),
+                    ],
+                }],
             },
-            ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME)
-        ]
+            ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME),
+        ],
     };
 
     const classBlock = fileCode
@@ -265,9 +261,8 @@ function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
 }
 
 function processClasses(classes: Class[], fileCode: CodeBlock) {
-    for (const currentClass of classes) {
-        if (processClassIfSpecial(currentClass, fileCode)) continue;
-
+    classes.forEach(currentClass => {
+        if (processClassIfSpecial(currentClass, fileCode)) return;
         const classExtendsClause = currentClass.BaseType && currentClass.BaseType !== OBJECT_CLASS_NAME
             ? ` extends ${currentClass.BaseType}`
             : "";
@@ -276,47 +271,52 @@ function processClasses(classes: Class[], fileCode: CodeBlock) {
             .addDescriptionAndDeprecationFor(currentClass);
 
         processClassMembers(classBlock, currentClass, fileCode);
-    }
+    });
 }
 
 function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
     namespaceBlock.section("EVENTS")
         .addDefinitionLines(
             namespace.StaticEvents ?? [],
-            event => `export const ${buildTypedEvent(event)};`
+            event => `export const ${buildTypedEvent(event)};`,
         );
 
     namespaceBlock.section("HOOKS")
         .addDefinitionLines(
             namespace.StaticHooks ?? [],
-            hook => `export const ${buildTypedHook(hook)};`
+            hook => `export const ${buildTypedHook(hook)};`,
         );
 
     processFunctions(
         namespace.StaticFunctions,
         namespaceBlock.section("FUNCTIONS"),
-        "export function "
+        "export function ",
     );
 }
 
 function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock) {
-    for (const namespace of namespaces) {
+    namespaces.forEach(namespace => {
         const namespaceBlock = fileCode
             .scope(`declare namespace ${namespace.Name} {`)
             .addDescriptionAndDeprecationFor(namespace);
 
         processNamespaceMembers(namespaceBlock, namespace);
-    }
+    });
 }
 
 function processEnums(enums: Enum[], fileCode: CodeBlock) {
-    for (const enumDef of enums) {
-        fileCode.scope(`declare enum ${enumDef.Name} {`)
-            .addDescriptionAndDeprecationFor(enumDef)
-            .add(
-                ...enumDef.Values.map(({Name, Value}) => `${Name} = ${Value},`)
-            );
-    }
+    enums.forEach(enumDef => fileCode.scope(`declare enum ${enumDef.Name} {`)
+        .addDescriptionAndDeprecationFor(enumDef)
+        .add(
+            ...enumDef.Values.map(({ Name, Value }) => `${Name} = ${Value},`),
+        ));
+}
+
+function addGeneralComments(fileCode: CodeBlock) {
+    fileCode.add(
+        "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare */",
+        "// noinspection JSUnusedGlobalSymbols",
+    );
 }
 
 function addPredefinedTypes(fileCode: CodeBlock) {
@@ -325,8 +325,9 @@ function addPredefinedTypes(fileCode: CodeBlock) {
     fileCode.scope(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
 }
 
-async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI) {
-    let fileCode = new CodeBlock();
+async function processCoreApi({ Classes, Namespaces, Enums }: CoreAPI) {
+    const fileCode = new CodeBlock();
+    addGeneralComments(fileCode);
     addPredefinedTypes(fileCode);
     processClasses(Classes, fileCode);
     processNamespaces(Namespaces, fileCode);
