@@ -325,10 +325,18 @@ function addPredefinedTypes(fileCode: CodeBlock) {
     fileCode.scope(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
 }
 
+function addGlobals(fileCode: CodeBlock) {
+    fileCode
+        .add("declare const script: CoreObject;");
+}
+
 async function processCoreApi({ Classes, Namespaces, Enums }: CoreAPI) {
     const fileCode = new CodeBlock();
+
     addGeneralComments(fileCode);
     addPredefinedTypes(fileCode);
+    addGlobals(fileCode);
+
     processClasses(Classes, fileCode);
     processNamespaces(Namespaces, fileCode);
     processEnums(Enums, fileCode);
