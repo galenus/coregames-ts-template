@@ -1,25 +1,24 @@
 import fs from "fs";
 import axios from "axios";
-import { Class, CoreAPI, DescribableDeprecatable, Function, Parameter, Signature, Tag } from "./core-api-declarations";
-
+import {
+    Class,
+    CoreAPI,
+    DescribableDeprecatable,
+    Function,
+    Namespace,
+    Parameter,
+    Signature,
+    Hook,
+    Event,
+    Tag,
+    Enum
+} from "./core-api-declarations";
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
 
 async function loadApiDefinitions(): Promise<CoreAPI> {
     const response = await axios.get(API_DEFINITIONS_URL);
     return response.data as CoreAPI;
-}
-
-function retrieveNextItem<T>(items: Record<string, T>, itemNames: string[], name?: string): T | false {
-    let currentName = name ?? itemNames.pop();
-    if (!currentName) return false;
-
-    while (!items[currentName]) {
-        currentName = itemNames.pop();
-        if (!currentName) return false;
-    }
-
-    return items[currentName];
 }
 
 const TAB = "    ";
@@ -60,11 +59,11 @@ class CodeBlock {
         return section;
     }
 
-    type(typeDeclaration: string, lastTypeLine: string | false = "}") {
-        const typeBlock = new CodeBlock(TAB, typeDeclaration, lastTypeLine || undefined, true);
-        this.code.push(typeBlock);
+    scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}") {
+        const scopeBlock = new CodeBlock(TAB, scopeDeclarationFirstLine, lastScopeLine || undefined, true);
+        this.code.push(scopeBlock);
 
-        return typeBlock;
+        return scopeBlock;
     }
 
     addDescriptionAndDeprecationFor({ Description, DeprecationMessage, IsDeprecated }: DescribableDeprecatable) {
@@ -164,13 +163,13 @@ function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
     return `${invocation}${isLambda ? " => " : ": "}${returnType}`;
 }
 
-function processFunctions(functions: Function[], functionsSection: CodeBlock) {
+function processFunctions(functions: Function[], functionsSection: CodeBlock, declarationPrefix = "") {
     for (const func of functions) {
         for (const signature of func.Signatures) {
             functionsSection
                 .section()
                 .addDefinitionLine(
-                    `${func.Name}${buildSignature(signature)};`,
+                    `${declarationPrefix}${func.Name}${buildSignature(signature)};`,
                     {
                         Description: signature.Description ?? func.Description,
                         IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
@@ -182,7 +181,14 @@ function processFunctions(functions: Function[], functionsSection: CodeBlock) {
 }
 
 const EVENT_TYPE_NAME = "Event";
+function buildTypedEvent(event: Event) {
+    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>`;
+}
+
 const HOOK_TYPE_NAME = "Hook";
+function buildTypedHook(hook: Hook) {
+    return `${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, true)}>`;
+}
 
 function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCode: CodeBlock) {
     classBlock.section("PROPERTIES", true)
@@ -194,20 +200,20 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
     classBlock.section("EVENTS", true)
         .addDefinitionLines(
             currentClass.Events ?? [],
-            event => `readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`
+            event => `readonly ${buildTypedEvent(event)};`
         );
 
     classBlock.section("HOOKS", true)
         .addDefinitionLines(
             currentClass.Hooks ?? [],
-            hook => `readonly ${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, true)}>;`
+            hook => `readonly ${buildTypedHook(hook)};`
         )
 
     processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
 
     if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
         const staticTypeName = `${currentClass.Name}Static`;
-        const staticClassBlock = fileCode.type(`declare interface ${staticTypeName} {`);
+        const staticClassBlock = fileCode.scope(`declare interface ${staticTypeName} {`);
 
         staticClassBlock.section("CONSTANTS", true)
             .addDefinitionLines(
@@ -222,89 +228,115 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
     }
 }
 
-
 const CONNECT_FUNC_NAME = "Connect";
 const HANDLER_TYPE_NAME = "THandler";
 
 function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
-    if (type.Name === EVENT_TYPE_NAME || type.Name === HOOK_TYPE_NAME) {
-        const connectFunc = type.MemberFunctions.find(f => f.Name === CONNECT_FUNC_NAME)!;
-        const connectFuncParams = connectFunc.Signatures[0].Parameters;
-        const connectFuncHandlerParamIndex = connectFuncParams.findIndex(p => p.Name === "listener");
-        const updatedClass: Class = {
-            ...type,
-            MemberFunctions: [
-                {
-                    ...connectFunc,
-                    Signatures: [{
-                        ...connectFunc.Signatures[0],
-                        Parameters: [
-                            ...connectFuncParams.slice(0, connectFuncHandlerParamIndex),
-                            { Name: "listener", Type: HANDLER_TYPE_NAME },
-                            ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1)
-                        ]
-                    }]
-                },
-                ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME)
-            ]
-        };
+    if (!(type.Name === EVENT_TYPE_NAME || type.Name === HOOK_TYPE_NAME)) return false;
 
-        const classBlock = fileCode
-            .type(`declare interface ${type.Name}<${HANDLER_TYPE_NAME}> {`)
-            .addDescriptionAndDeprecationFor(type);
+    const connectFunc = type.MemberFunctions.find(f => f.Name === CONNECT_FUNC_NAME)!;
+    const connectFuncParams = connectFunc.Signatures[0].Parameters;
+    const connectFuncHandlerParamIndex = connectFuncParams.findIndex(p => p.Name === "listener");
+    const updatedClass: Class = {
+        ...type,
+        MemberFunctions: [
+            {
+                ...connectFunc,
+                Signatures: [{
+                    ...connectFunc.Signatures[0],
+                    Parameters: [
+                        ...connectFuncParams.slice(0, connectFuncHandlerParamIndex),
+                        { Name: "listener", Type: HANDLER_TYPE_NAME },
+                        ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1)
+                    ]
+                }]
+            },
+            ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME)
+        ]
+    };
 
-        processClassMembers(classBlock, updatedClass, fileCode);
+    const classBlock = fileCode
+        .scope(`declare interface ${type.Name}<${HANDLER_TYPE_NAME}> {`)
+        .addDescriptionAndDeprecationFor(type);
 
-        return true;
-    }
+    processClassMembers(classBlock, updatedClass, fileCode);
 
-    return false;
+    return true;
 }
 
-function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock) {
-    let currentClass: Class | false;
-    while (!!(currentClass = retrieveNextItem(classes, classNames))) {
+function processClasses(classes: Class[], fileCode: CodeBlock) {
+    for (const currentClass of classes) {
         if (processClassIfSpecial(currentClass, fileCode)) continue;
 
         const classExtendsClause = currentClass.BaseType && currentClass.BaseType !== OBJECT_CLASS_NAME
             ? ` extends ${currentClass.BaseType}`
             : "";
         const classBlock = fileCode
-            .type(`declare interface ${currentClass.Name}${classExtendsClause} {`)
+            .scope(`declare interface ${currentClass.Name}${classExtendsClause} {`)
             .addDescriptionAndDeprecationFor(currentClass);
 
         processClassMembers(classBlock, currentClass, fileCode);
     }
+}
 
-    return fileCode;
+function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
+    namespaceBlock.section("EVENTS")
+        .addDefinitionLines(
+            namespace.StaticEvents ?? [],
+            event => `export const ${buildTypedEvent(event)};`
+        );
+
+    namespaceBlock.section("HOOKS")
+        .addDefinitionLines(
+            namespace.StaticHooks ?? [],
+            hook => `export const ${buildTypedHook(hook)};`
+        );
+
+    processFunctions(
+        namespace.StaticFunctions,
+        namespaceBlock.section("FUNCTIONS"),
+        "export function "
+    );
+}
+
+function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock) {
+    for (const namespace of namespaces) {
+        const namespaceBlock = fileCode
+            .scope(`declare namespace ${namespace.Name} {`)
+            .addDescriptionAndDeprecationFor(namespace);
+
+        processNamespaceMembers(namespaceBlock, namespace);
+    }
+}
+
+function processEnums(enums: Enum[], fileCode: CodeBlock) {
+    for (const enumDef of enums) {
+        fileCode.scope(`declare enum ${enumDef.Name} {`)
+            .addDescriptionAndDeprecationFor(enumDef)
+            .add(
+                ...enumDef.Values.map(({Name, Value}) => `${Name} = ${Value},`)
+            );
+    }
 }
 
 function addPredefinedTypes(fileCode: CodeBlock) {
-    fileCode.type(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
-    fileCode.type(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false);
-    fileCode.type(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
-
-    return fileCode;
+    fileCode.scope(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
+    fileCode.scope(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false);
+    fileCode.scope(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
 }
 
 async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI) {
-    const {classes, classNames} = Classes.reduce(
-        ({ classes, classNames }, clazz) => ({
-            classes: {...classes, [clazz.Name]: clazz },
-            classNames: [...classNames, clazz.Name ]
-        }),
-        {classes: {} as Record<string, Class>, classNames: [] as string[]}
-    );
-
     let fileCode = new CodeBlock();
-    fileCode = addPredefinedTypes(fileCode);
-    fileCode = processClasses(classes, classNames, fileCode);
+    addPredefinedTypes(fileCode);
+    processClasses(Classes, fileCode);
+    processNamespaces(Namespaces, fileCode);
+    processEnums(Enums, fileCode);
 
     return fileCode;
 }
 
 loadApiDefinitions()
     .then(processCoreApi)
-    .then(result => fs.writeFileSync("./generated-definitions.d.ts", result.toString()))
+    .then(result => fs.writeFileSync("./generated/core-api-definitions.d.ts", result.toString()))
     .then(() => console.log("Done!"))
     .catch(e => console.error("Failed with an error:", e));
