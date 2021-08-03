@@ -314,7 +314,7 @@ function processEnums(enums: Enum[], fileCode: CodeBlock) {
 
 function addGeneralComments(fileCode: CodeBlock) {
     fileCode.add(
-        "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare */",
+        "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare,no-trailing-spaces,no-multiple-empty-lines,@typescript-eslint/indent */",
         "// noinspection JSUnusedGlobalSymbols",
     );
 }
