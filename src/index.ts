@@ -77,6 +77,22 @@ class CodeBlock {
         return this;
     }
 
+    addDefinitionLine(declarationLine: string, definition: DescribableDeprecatable) {
+        this.section()
+            .add(declarationLine)
+            .addDescriptionAndDeprecationFor(definition);
+
+        return this;
+    }
+
+    addDefinitionLines<T extends DescribableDeprecatable>(definitions: T[], toDeclarationLine: (def: T) => string) {
+        for (const definition of definitions) {
+            this.addDefinitionLine(toDeclarationLine(definition), definition);
+        }
+
+        return this;
+    }
+
     getCodeLines(): string[] {
         if (this.removeEmpty && this.code.length === 1 && this.code[0] === this.firstLine) {
             return [];
@@ -108,7 +124,6 @@ class CodeBlock {
 }
 
 const INTEGER_TYPE_NAME = "Integer";
-const EVENT_TYPE_NAME = "Event";
 const OPTIONAL_TYPE_NAME = "Optional";
 const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";
 
@@ -153,19 +168,97 @@ function processFunctions(functions: Function[], functionsSection: CodeBlock) {
         for (const signature of func.Signatures) {
             functionsSection
                 .section()
-                .add(`${func.Name}${buildSignature(signature)};`)
-                .addDescriptionAndDeprecationFor({
-                    Description: signature.Description ?? func.Description,
-                    IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
-                    DeprecationMessage: signature.DeprecationMessage ?? func.DeprecationMessage
-                });
+                .addDefinitionLine(
+                    `${func.Name}${buildSignature(signature)};`,
+                    {
+                        Description: signature.Description ?? func.Description,
+                        IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
+                        DeprecationMessage: signature.DeprecationMessage ?? func.DeprecationMessage
+                    }
+                );
         }
     }
+}
+
+const EVENT_TYPE_NAME = "Event";
+const HOOK_TYPE_NAME = "Hook";
+
+function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCode: CodeBlock) {
+    classBlock.section("PROPERTIES", true)
+        .addDefinitionLines(
+            currentClass.Properties,
+            prop => `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mapType(prop.Type)};`
+        );
+
+    classBlock.section("EVENTS", true)
+        .addDefinitionLines(
+            currentClass.Events ?? [],
+            event => `readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`
+        );
+
+    processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
+
+    if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
+        const staticTypeName = `${currentClass.Name}Static`;
+        const staticClassBlock = fileCode.type(`declare interface ${staticTypeName} {`);
+
+        staticClassBlock.section("CONSTANTS", true)
+            .addDefinitionLines(
+                currentClass.Constants ?? [],
+                constant => `readonly ${constant.Name}: ${mapType(constant.Type)};`
+            );
+
+        processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true));
+        processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true));
+
+        fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`);
+    }
+}
+
+
+const CONNECT_FUNC_NAME = "Connect";
+const HANDLER_TYPE_NAME = "THandler";
+
+function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
+    if (type.Name === EVENT_TYPE_NAME || type.Name === HOOK_TYPE_NAME) {
+        const connectFunc = type.MemberFunctions.find(f => f.Name === CONNECT_FUNC_NAME)!;
+        const connectFuncParams = connectFunc.Signatures[0].Parameters;
+        const connectFuncHandlerParamIndex = connectFuncParams.findIndex(p => p.Name === "listener");
+        const updatedClass: Class = {
+            ...type,
+            MemberFunctions: [
+                {
+                    ...connectFunc,
+                    Signatures: [{
+                        ...connectFunc.Signatures[0],
+                        Parameters: [
+                            ...connectFuncParams.slice(0, connectFuncHandlerParamIndex),
+                            { Name: "listener", Type: HANDLER_TYPE_NAME },
+                            ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1)
+                        ]
+                    }]
+                },
+                ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME)
+            ]
+        };
+
+        const classBlock = fileCode
+            .type(`declare interface ${type.Name}<${HANDLER_TYPE_NAME}> {`)
+            .addDescriptionAndDeprecationFor(type);
+
+        processClassMembers(classBlock, updatedClass, fileCode);
+
+        return true;
+    }
+
+    return false;
 }
 
 function processClasses(classes: Record<string, Class>, classNames: string[], fileCode: CodeBlock) {
     let currentClass: Class | false;
     while (!!(currentClass = retrieveNextItem(classes, classNames))) {
+        if (processClassIfSpecial(currentClass, fileCode)) continue;
+
         const classExtendsClause = currentClass.BaseType && currentClass.BaseType !== OBJECT_CLASS_NAME
             ? ` extends ${currentClass.BaseType}`
             : "";
@@ -173,52 +266,17 @@ function processClasses(classes: Record<string, Class>, classNames: string[], fi
             .type(`declare interface ${currentClass.Name}${classExtendsClause} {`)
             .addDescriptionAndDeprecationFor(currentClass);
 
-        const propertiesSection = classBlock.section("PROPERTIES", true);
-        for (const field of currentClass.Properties) {
-            propertiesSection
-                .section()
-                .add(`${field.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${field.Name}: ${mapType(field.Type)};`)
-                .addDescriptionAndDeprecationFor(field);
-        }
-
-        const eventsSection = classBlock.section("EVENTS", true);
-        for (const event of currentClass.Events ?? []) {
-            eventsSection
-                .section()
-                .add(`readonly ${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>;`)
-                .addDescriptionAndDeprecationFor(event);
-        }
-
-        processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
-
-        if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
-            const staticTypeName = `${currentClass.Name}Static`;
-            const staticClassBlock = fileCode.type(`declare interface ${staticTypeName} {`);
-
-            processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true));
-
-            const constantsSection = staticClassBlock.section("CONSTANTS", true);
-            for (const constant of currentClass.Constants ?? []) {
-                constantsSection
-                    .section()
-                    .add(`readonly ${constant.Name}: ${mapType(constant.Type)};`)
-                    .addDescriptionAndDeprecationFor(constant);
-            }
-
-            processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true));
-
-            fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`)
-        }
+        processClassMembers(classBlock, currentClass, fileCode);
     }
 
     return fileCode;
 }
 
-function addCommonTypes(fileCode: CodeBlock) {
+function addPredefinedTypes(fileCode: CodeBlock) {
     fileCode.type(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
-    fileCode.type(`declare type ${EVENT_TYPE_NAME}<THandler> = { Connect(handler: THandler): void };`, false);
+    fileCode.type(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false);
     fileCode.type(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
-    fileCode.type(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false)
+
     return fileCode;
 }
 
@@ -230,8 +288,9 @@ async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI) {
         }),
         {classes: {} as Record<string, Class>, classNames: [] as string[]}
     );
+
     let fileCode = new CodeBlock();
-    fileCode = addCommonTypes(fileCode);
+    fileCode = addPredefinedTypes(fileCode);
     fileCode = processClasses(classes, classNames, fileCode);
 
     return fileCode;
