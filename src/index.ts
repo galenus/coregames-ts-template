@@ -141,10 +141,23 @@ function getName(p: Parameter) {
     return p.Name?.replace(/ /g, "_");
 }
 
-function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
+interface SignatureOptions {
+    isStatic?: boolean;
+    isLambdaSignature?: boolean;
+}
+
+function buildSignature(
+    { Parameters, Returns }: Callable,
+    options?: SignatureOptions,
+) {
+    const { isStatic, isLambdaSignature } = options ?? {};
+
     const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
     const returnDefs = Returns?.map(r => `${r.IsOptional ? `${OPTIONAL_TYPE_NAME}<` : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]" : ""}`);
 
+    if (isStatic) {
+        parameterDefs?.unshift("this: void");
+    }
     const invocation = `(${parameterDefs?.join(", ") ?? ""})`;
 
     let returnType;
@@ -156,16 +169,21 @@ function buildSignature({ Parameters, Returns }: Callable, isLambda = false) {
         returnType = `${MULTI_RETURN_TYPE_NAME}<[${returnDefs.join(", ")}]>`;
     }
 
-    return `${invocation}${isLambda ? " => " : ": "}${returnType}`;
+    return `${invocation}${isLambdaSignature ? " => " : ": "}${returnType}`;
 }
 
-function processFunctions(functions: Function[], functionsSection: CodeBlock, declarationPrefix = "") {
+function processFunctions(
+    functions: Function[],
+    functionsSection: CodeBlock,
+    staticFunctions: boolean,
+    declarationPrefix = "",
+) {
     functions.forEach(func => {
         func.Signatures.forEach(signature => {
             functionsSection
                 .section()
                 .addDefinitionLine(
-                    `${declarationPrefix}${func.Name}${buildSignature(signature)};`,
+                    `${declarationPrefix}${func.Name}${buildSignature(signature, { isStatic: staticFunctions })};`,
                     {
                         Description: signature.Description ?? func.Description,
                         IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
@@ -178,12 +196,12 @@ function processFunctions(functions: Function[], functionsSection: CodeBlock, de
 
 const EVENT_TYPE_NAME = "Event";
 function buildTypedEvent(event: Event) {
-    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, true)}>`;
+    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, { isStatic: true, isLambdaSignature: true })}>`;
 }
 
 const HOOK_TYPE_NAME = "Hook";
 function buildTypedHook(hook: Hook) {
-    return `${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, true)}>`;
+    return `${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, { isStatic: true, isLambdaSignature: true })}>`;
 }
 
 function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCode: CodeBlock) {
@@ -205,7 +223,7 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
             hook => `readonly ${buildTypedHook(hook)};`,
         );
 
-    processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true));
+    processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true), false);
 
     if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
         const staticTypeName = `${currentClass.Name}Static`;
@@ -217,8 +235,8 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
                 constant => `readonly ${constant.Name}: ${mapType(constant.Type)};`,
             );
 
-        processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true));
-        processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true));
+        processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true), true);
+        processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true), true);
 
         fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`);
     }
@@ -290,6 +308,7 @@ function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace
     processFunctions(
         namespace.StaticFunctions,
         namespaceBlock.section("FUNCTIONS"),
+        true,
         "export function ",
     );
 }
