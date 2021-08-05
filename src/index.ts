@@ -346,7 +346,6 @@ function addGeneralComments(fileCode: CodeBlock) {
 
 function addPredefinedTypes(fileCode: CodeBlock) {
     fileCode.scope(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
-    fileCode.scope(`declare type ${MULTI_RETURN_TYPE_NAME}<T extends Array> = {};`, false);
     fileCode.scope(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
 }
 
