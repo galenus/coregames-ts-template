@@ -351,7 +351,14 @@ function addPredefinedTypes(fileCode: CodeBlock) {
 
 function addGlobals(fileCode: CodeBlock) {
     fileCode
-        .add("declare const script: CoreObject;");
+        .addAsSection("declare const script: CoreObject;")
+        .comment(c => c.add("Provides access to current instance of script."))
+        .addAsSection("declare function time(this: void): number;")
+        .comment(c => c.add("Returns the time in seconds (floating point) since the game started on the server."))
+        .addAsSection("declare function print(this: void, message: string): string;")
+        .comment(c => c.add("Print a message to the event log. Access the Event Log from the Window menu."))
+        .addAsSection("declare function warn(this: void, message: string): string;")
+        .comment(c => c.add("Similar to print(), but includes the script name and line number."));
 }
 
 async function processCoreApi({ Classes, Namespaces, Enums }: CoreAPI) {
