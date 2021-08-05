@@ -43,20 +43,26 @@ class CodeBlock {
         return this;
     }
 
-    comment() {
+    comment(addComments: (commentsBlock: CodeBlock) => void) {
         if (this.code[0] instanceof CodeBlock && this.code[0].firstLine === FIRST_COMMENT_LINE) {
-            return this.code[0];
+            addComments(this.code[0]);
+            return this;
         }
 
         const commentBlock = new CodeBlock(" * ", FIRST_COMMENT_LINE, " */");
         this.code.unshift(commentBlock);
-        return commentBlock;
+        addComments(commentBlock);
+        return this;
     }
 
     section(name?: string, wrapWithNewLines = false) {
         const section = new CodeBlock("", typeof name === "string" ? `// ${name}` : undefined, undefined, wrapWithNewLines, true);
         this.code.push(section);
         return section;
+    }
+
+    addAsSection(...lines: string[]) {
+        return this.section().add(...lines);
     }
 
     scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}") {
@@ -69,9 +75,9 @@ class CodeBlock {
     addDescriptionAndDeprecationFor({ Description, DeprecationMessage, IsDeprecated }: DescribableDeprecatable) {
         if (!Description && !IsDeprecated) return this;
 
-        this.comment()
+        this.comment(c => c
             .add(Description ?? false)
-            .add(IsDeprecated ? `@deprecated ${DeprecationMessage ?? ""}` : false);
+            .add(IsDeprecated ? `@deprecated ${DeprecationMessage ?? ""}` : false));
 
         return this;
     }
