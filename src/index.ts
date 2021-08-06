@@ -21,8 +21,9 @@ async function loadApiDefinitions(): Promise<CoreAPI> {
     return response.data as CoreAPI;
 }
 
-const TAB = "    ";
 const OBJECT_CLASS_NAME = "Object";
+const CORE_API_OBJECT_CLASS_NAME = "__CoreAPI__Object";
+const TAB = "    ";
 const FIRST_COMMENT_LINE = "/**";
 
 class CodeBlock {
@@ -129,13 +130,20 @@ const INTEGER_TYPE_NAME = "Integer";
 const OPTIONAL_TYPE_NAME = "Optional";
 const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";
 
-function mapType(type?: string): string {
+interface MapTypeResult {
+    mappedType: string;
+    isGeneric?: boolean;
+}
+
+function mapType(type?: string): MapTypeResult {
     switch (type) {
-        case "integer": return INTEGER_TYPE_NAME;
-        case "function": return "(...args: any[]) => void";
-        case "table": return "Record<string, any>";
-        case undefined: return "any";
-        default: return type;
+        case "integer": return { mappedType: INTEGER_TYPE_NAME };
+        case "function": return { mappedType: "(...args: any[]) => void" };
+        case "table": return { mappedType: "Record<string, any>" };
+        case undefined: return { mappedType: "any" };
+        case "value": return { mappedType: "any", isGeneric: true };
+        case OBJECT_CLASS_NAME: return { mappedType: CORE_API_OBJECT_CLASS_NAME };
+        default: return { mappedType: type };
     }
 }
 
@@ -158,13 +166,33 @@ function buildSignature(
 ) {
     const { isStatic, isLambdaSignature } = options ?? {};
 
-    const parameterDefs = Parameters?.map(p => `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mapType(p.Type)}${p.IsVariadic ? "[]" : ""}`);
-    const returnDefs = Returns?.map(r => `${r.IsOptional ? `${OPTIONAL_TYPE_NAME}<` : ""}${mapType(r.Type)}${r.IsOptional ? ">" : ""}${r.IsVariadic ? "[]" : ""}`);
+    const parameterDefs = Parameters?.map(p => {
+        const { mappedType } = mapType(p.Type);
+        return `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mappedType}${p.IsVariadic ? "[]" : ""}`;
+    });
+
+    const returnDefs: string[] = [];
+    const genericParams: string[] = [];
+    let genericParamsCount = 0;
+    for (let index = 0; index < (Returns?.length ?? 0); index++) {
+        const ret = Returns![index];
+        // eslint-disable-next-line prefer-const
+        let { mappedType, isGeneric } = mapType(ret.Type);
+        if (isGeneric) {
+            genericParamsCount++;
+            const originalMappedType = mappedType;
+            mappedType = `T${genericParamsCount}`;
+            genericParams.push(`${mappedType} = ${originalMappedType}`);
+        }
+        const retDef = `${ret.IsOptional ? `${OPTIONAL_TYPE_NAME}<` : ""}${mappedType}${ret.IsOptional ? ">" : ""}${ret.IsVariadic ? "[]" : ""}`;
+        returnDefs.push(retDef);
+    }
 
     if (isStatic) {
         parameterDefs?.unshift("this: void");
     }
-    const invocation = `(${parameterDefs?.join(", ") ?? ""})`;
+    const genericParamsPrefix = genericParams.length > 0 ? `<${genericParams.join(",")}>` : "";
+    const invocation = `${genericParamsPrefix}(${parameterDefs?.join(", ") ?? ""})`;
 
     let returnType;
     if (!returnDefs?.length) {
@@ -178,13 +206,36 @@ function buildSignature(
     return `${invocation}${isLambdaSignature ? " => " : ": "}${returnType}`;
 }
 
+const IS_A_FUNCTION = "IsA";
+const SPECIAL_FUNCTION_NAMES = [IS_A_FUNCTION];
+
+function handleSpecialFunction(
+    func: Function,
+    functionsSection: CodeBlock,
+    staticFunctions: boolean,
+    ownerName: string,
+    declarationPrefix: string,
+) {
+    if (func.Name === IS_A_FUNCTION && ownerName === OBJECT_CLASS_NAME) {
+        functionsSection
+            .section()
+            .add(`${func.Name}<T extends ${mapType(OBJECT_CLASS_NAME).mappedType}>(): this is T;`);
+    }
+}
+
 function processFunctions(
     functions: Function[],
     functionsSection: CodeBlock,
     staticFunctions: boolean,
+    ownerName: string,
     declarationPrefix = "",
 ) {
     functions.forEach(func => {
+        if (SPECIAL_FUNCTION_NAMES.includes(func.Name)) {
+            handleSpecialFunction(func, functionsSection, staticFunctions, ownerName, declarationPrefix);
+            return;
+        }
+
         func.Signatures.forEach(signature => {
             functionsSection
                 .section()
@@ -214,7 +265,10 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
     classBlock.section("PROPERTIES", true)
         .addDefinitionLines(
             currentClass.Properties,
-            prop => `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mapType(prop.Type)};`,
+            prop => {
+                const { mappedType } = mapType(prop.Type);
+                return `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mappedType};`;
+            },
         );
 
     classBlock.section("EVENTS", true)
@@ -229,29 +283,60 @@ function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCod
             hook => `readonly ${buildTypedHook(hook)};`,
         );
 
-    processFunctions(currentClass.MemberFunctions, classBlock.section("INSTANCE METHODS", true), false);
+    processFunctions(
+        currentClass.MemberFunctions,
+        classBlock.section("INSTANCE METHODS", true),
+        false,
+        currentClass.Name,
+    );
+}
 
+interface StaticDeclarationOverrides {
+    staticTypeName?: string;
+    staticInstanceDeclaration?: string;
+}
+
+function processClassStatics(
+    currentClass: Class,
+    fileCode: CodeBlock,
+    declarationOverrides?: StaticDeclarationOverrides,
+) {
     if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
-        const staticTypeName = `${currentClass.Name}Static`;
+        const mappedClassName: string = mapType(currentClass.Name).mappedType;
+
+        const staticTypeName = declarationOverrides?.staticTypeName ?? `${mappedClassName}Static`;
+        const staticInstanceDeclaration = declarationOverrides?.staticInstanceDeclaration
+            ?? `declare const ${mappedClassName}: ${staticTypeName};`;
+
         const staticClassBlock = fileCode.scope(`declare interface ${staticTypeName} {`);
 
         staticClassBlock.section("CONSTANTS", true)
             .addDefinitionLines(
                 currentClass.Constants ?? [],
-                constant => `readonly ${constant.Name}: ${mapType(constant.Type)};`,
+                constant => `readonly ${constant.Name}: ${mapType(constant.Type).mappedType};`,
             );
 
-        processFunctions(currentClass.Constructors ?? [], staticClassBlock.section("CONSTRUCTORS", true), true);
-        processFunctions(currentClass.StaticFunctions ?? [], staticClassBlock.section("STATIC METHODS", true), true);
+        processFunctions(
+            currentClass.Constructors ?? [],
+            staticClassBlock.section("CONSTRUCTORS", true),
+            true,
+            currentClass.Name,
+        );
+        processFunctions(
+            currentClass.StaticFunctions ?? [],
+            staticClassBlock.section("STATIC METHODS", true),
+            true,
+            currentClass.Name,
+        );
 
-        fileCode.add(`declare const ${currentClass.Name}: ${staticTypeName};`);
+        fileCode.add(staticInstanceDeclaration);
     }
 }
 
 const CONNECT_FUNC_NAME = "Connect";
 const HANDLER_TYPE_NAME = "THandler";
 
-function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
+function handleConnectableClasses(type: Class, fileCode: CodeBlock): boolean {
     if (!(type.Name === EVENT_TYPE_NAME || type.Name === HOOK_TYPE_NAME)) return false;
 
     const connectFunc = type.MemberFunctions.find(f => f.Name === CONNECT_FUNC_NAME)!;
@@ -274,27 +359,50 @@ function processClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
             ...type.MemberFunctions.filter(f => f.Name !== CONNECT_FUNC_NAME),
         ],
     };
-
     const classBlock = fileCode
         .scope(`declare interface ${type.Name}<${HANDLER_TYPE_NAME}> {`)
         .addDescriptionAndDeprecationFor(type);
 
     processClassMembers(classBlock, updatedClass, fileCode);
+    processClassStatics(updatedClass, fileCode);
 
     return true;
 }
 
+function handleObjectClass(type: Class, fileCode: CodeBlock): boolean {
+    if (type.Name !== OBJECT_CLASS_NAME) return false;
+
+    const classBlock = fileCode
+        .scope(`declare interface ${mapType(OBJECT_CLASS_NAME).mappedType} {`)
+        .addDescriptionAndDeprecationFor(type);
+
+    processClassMembers(classBlock, type, fileCode);
+    processClassStatics(type, fileCode, {
+        staticTypeName: "ObjectConstructor",
+        staticInstanceDeclaration: "declare var Object: ObjectConstructor;",
+    });
+
+    return true;
+}
+
+function handleClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
+    return handleConnectableClasses(type, fileCode)
+        || handleObjectClass(type, fileCode);
+}
+
 function processClasses(classes: Class[], fileCode: CodeBlock) {
     classes.forEach(currentClass => {
-        if (processClassIfSpecial(currentClass, fileCode)) return;
-        const classExtendsClause = currentClass.BaseType && currentClass.BaseType !== OBJECT_CLASS_NAME
-            ? ` extends ${currentClass.BaseType}`
+        if (handleClassIfSpecial(currentClass, fileCode)) return;
+
+        const classExtendsClause = currentClass.BaseType
+            ? ` extends ${mapType(currentClass.BaseType).mappedType}`
             : "";
         const classBlock = fileCode
-            .scope(`declare interface ${currentClass.Name}${classExtendsClause} {`)
+            .scope(`declare interface ${mapType(currentClass.Name).mappedType}${classExtendsClause} {`)
             .addDescriptionAndDeprecationFor(currentClass);
 
         processClassMembers(classBlock, currentClass, fileCode);
+        processClassStatics(currentClass, fileCode);
     });
 }
 
@@ -315,6 +423,7 @@ function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace
         namespace.StaticFunctions,
         namespaceBlock.section("FUNCTIONS"),
         true,
+        namespace.Name,
         "export function ",
     );
 }
@@ -330,7 +439,7 @@ function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock) {
 }
 
 function processEnums(enums: Enum[], fileCode: CodeBlock) {
-    enums.forEach(enumDef => fileCode.scope(`declare enum ${enumDef.Name} {`)
+    enums.forEach(enumDef => fileCode.scope(`declare enum ${mapType(enumDef.Name).mappedType} {`)
         .addDescriptionAndDeprecationFor(enumDef)
         .add(
             ...enumDef.Values.map(({ Name, Value }) => `${Name} = ${Value},`),
@@ -339,7 +448,7 @@ function processEnums(enums: Enum[], fileCode: CodeBlock) {
 
 function addGeneralComments(fileCode: CodeBlock) {
     fileCode.add(
-        "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare,no-trailing-spaces,no-multiple-empty-lines,@typescript-eslint/indent */",
+        "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare,no-trailing-spaces,no-multiple-empty-lines,@typescript-eslint/indent,@typescript-eslint/naming-convention,no-underscore-dangle,vars-on-top,no-var */",
         "// noinspection JSUnusedGlobalSymbols",
     );
 }
