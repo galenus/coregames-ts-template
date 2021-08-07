@@ -12,7 +12,9 @@
     "no-console": "off",
     "max-len": ["error", 120, { "ignoreStrings": true }],
     "arrow-parens": ["error", "as-needed"],
+    "no-plusplus": "off",
     "@typescript-eslint/indent": ["error", 4],
-    "@typescript-eslint/quotes": ["error", "double"]
+    "@typescript-eslint/quotes": ["error", "double"],
+    "@typescript-eslint/no-unused-vars": "warn"
   }
 }
