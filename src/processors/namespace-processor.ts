@@ -1,6 +1,6 @@
-import {Namespace} from "../core-api-declarations";
-import {CodeBlock} from "../code-block";
-import {tag} from "../api-types";
+import {Namespace} from "./core-api-declarations";
+import {CodeBlock} from "./code-block";
+import {tag} from "./api-types";
 import {buildTypedEvent, buildTypedHook} from "./fields-processor";
 import {processFunctions} from "./functions-processor";
 

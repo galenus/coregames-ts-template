@@ -1,5 +1,5 @@
-import {Event, Hook} from "../core-api-declarations";
-import {Context} from "../api-types";
+import {Event, Hook} from "./core-api-declarations";
+import {Context} from "./api-types";
 import {buildSignature} from "./callables-processor";
 
 export const EVENT_TYPE_NAME = "Event";

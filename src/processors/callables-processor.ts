@@ -1,7 +1,7 @@
-import {Signature} from "../core-api-declarations";
-import {Context} from "../api-types";
-import {mapType} from "../types-mapping";
-import {getName} from "../names-mapping";
+import {Signature} from "./core-api-declarations";
+import {Context} from "./api-types";
+import {mapType} from "./types-mapping";
+import {getName} from "./names-mapping";
 
 export const OPTIONAL_TYPE_NAME = "Optional";
 const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";

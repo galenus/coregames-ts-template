@@ -1,7 +1,7 @@
-import {Class, Tag} from "../core-api-declarations";
-import {CodeBlock} from "../code-block";
-import {mapType, OBJECT_CLASS_NAME} from "../types-mapping";
-import {tag} from "../api-types";
+import {Class, Tag} from "./core-api-declarations";
+import {CodeBlock} from "./code-block";
+import {mapType, OBJECT_CLASS_NAME} from "./types-mapping";
+import {tag} from "./api-types";
 import {buildTypedEvent, buildTypedHook, EVENT_TYPE_NAME, HOOK_TYPE_NAME} from "./fields-processor";
 import {processFunctions} from "./functions-processor";
 

@@ -1,7 +1,7 @@
-import {Function} from "../core-api-declarations";
-import {CodeBlock} from "../code-block";
-import {Context} from "../api-types";
-import {mapType, OBJECT_CLASS_NAME} from "../types-mapping";
+import {Function} from "./core-api-declarations";
+import {CodeBlock} from "./code-block";
+import {Context} from "./api-types";
+import {mapType, OBJECT_CLASS_NAME} from "./types-mapping";
 import {buildSignature} from "./callables-processor";
 
 const IS_A_FUNCTION = "IsA";

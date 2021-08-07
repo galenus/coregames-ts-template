@@ -1,7 +1,7 @@
-import {Enum} from "../core-api-declarations";
-import {CodeBlock} from "../code-block";
-import {tag} from "../api-types";
-import {mapType} from "../types-mapping";
+import {Enum} from "./core-api-declarations";
+import {CodeBlock} from "./code-block";
+import {tag} from "./api-types";
+import {mapType} from "./types-mapping";
 
 export function processEnums(enums: Enum[], fileCode: CodeBlock) {
     enums
