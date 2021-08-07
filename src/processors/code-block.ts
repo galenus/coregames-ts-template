@@ -7,7 +7,7 @@ export class CodeBlock {
     private readonly code: (string | CodeBlock)[] = [];
 
     constructor(
-        private readonly indentCharacters = DEFAULT_TAB,
+        private readonly nestedIndent = DEFAULT_TAB,
         private readonly firstLine?: string,
         private readonly lastLine?: string,
         private readonly contentPrefix: string = "",
@@ -28,7 +28,7 @@ export class CodeBlock {
             return this;
         }
 
-        const commentBlock = new CodeBlock(this.indentCharacters, FIRST_COMMENT_LINE, " */", " * ");
+        const commentBlock = new CodeBlock("", FIRST_COMMENT_LINE, " */", " * ");
         this.code.unshift(commentBlock);
         addComments(commentBlock);
         return this;
@@ -36,7 +36,7 @@ export class CodeBlock {
 
     section(name?: string, wrapWithNewLines = false) {
         const section = new CodeBlock(
-            this.indentCharacters,
+            "",
             typeof name === "string" ? `// ${name}` : undefined,
             undefined,
             "",
@@ -53,7 +53,7 @@ export class CodeBlock {
 
     scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}") {
         const scopeBlock = new CodeBlock(
-            this.indentCharacters,
+            this.nestedIndent,
             scopeDeclarationFirstLine,
             lastScopeLine || undefined,
             undefined,
@@ -92,20 +92,21 @@ export class CodeBlock {
             return [];
         }
 
+        const firstLineIndex = !!this.firstLine ? this.code.indexOf(this.firstLine) : -1;
         return [
             ...this.wrapWithNewLines ? [""] : [],
-            ...this.code.flatMap(code => {
-                if (code === this.firstLine) {
-                    return [code];
-                }
+            ...this.code.flatMap((code, index) => {
+                const prefix = index <= firstLineIndex
+                    ? ""
+                    : `${!!this.firstLine && !!this.lastLine ? this.nestedIndent : ""}${this.contentPrefix}`;
 
                 if (code instanceof CodeBlock) {
-                    return code.getCodeLines().map(line => this.contentPrefix + line);
+                    return code.getCodeLines().map(line => prefix + line);
                 }
 
                 return code.split("\n")
                     .map(line => line.replace(/^\r|\r$/g, ""))
-                    .map(line => this.contentPrefix + line);
+                    .map(line => prefix + line);
             }),
             ...this.lastLine ? [this.lastLine] : [],
             ...this.wrapWithNewLines ? [""] : [],
