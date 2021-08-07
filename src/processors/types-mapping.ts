@@ -27,13 +27,106 @@ type TypesByMemberName = Record<string, TypesByUsage>
 type TypesByMemberTag = Partial<Record<MemberTags, TypesByMemberName>>
 type TypesByRootName = Record<string, TypesByMemberTag>
 type TypesByRootTag = Partial<Record<RootTags, TypesByRootName>>
+
 const specialTypes: TypesByRootTag = {
     namespace: {
+        Chat: {
+            hook: {
+                receiveMessageHook: {
+                    arg: {
+                        parameters: "{ message: string, speakerName: string }"
+                    }
+                },
+                sendMessageHook: {
+                    arg: {
+                        parameters: "{ message: string }"
+                    }
+                }
+            },
+            function: {
+                BroadcastMessage: {
+                    arg: {
+                        optionalParams: "{ players: Player | Array<Player> }"
+                    }
+                },
+                LocalMessage: {
+                    arg: {
+                        optionalParams: "{ players: Player | Array<Player> }"
+                    }
+                }
+            }
+        },
+        CoreDebug: {
+            function: {
+                DrawLine: {
+                    arg: {
+                        parameters: "{ duration?: number, thickness?: number, color?: Color }"
+                    }
+                },
+                DrawBox: {
+                    arg: {
+                        parameters: "{ duration?: number, thickness?: number, color?: Color, rotation: Rotation }"
+                    }
+                },
+                DrawSphere: {
+                    arg: {
+                        parameters: "{ duration?: number, thickness?: number, color?: Color }"
+                    }
+                }
+            }
+        },
+        CoreString: {
+            function: {
+                Split: {
+                    arg: {
+                        optionalParameters: "{ removeEmptyResults?: boolean, maxResults?: number, delimiters?: string | Array<string> }"
+                    }
+                }
+            }
+        },
+        Game: {
+            function: {
+                GetPlayers: {
+                    arg: {
+                        optionalParams: "{ ignoreDead?: boolean, ignoreLiving?: boolean, ignoreSpawned?: boolean, ignoreDespawned?: boolean, ignoreTeams?: number | Array<number>, includeTeams?: number | Array<number>, ignorePlayers?: Player | Array<Player> }"
+                    }
+                },
+                FindPlayersInCylinder: {
+                    arg: {
+                        optionalParams: "{ ignoreDead?: boolean, ignoreLiving?: boolean, ignoreSpawned?: boolean, ignoreDespawned?: boolean, ignoreTeams?: number | Array<number>, includeTeams?: number | Array<number>, ignorePlayers?: Player | Array<Player> }"
+                    }
+                },
+                FindPlayersInSphere: {
+                    arg: {
+                        optionalParams: "{ ignoreDead?: boolean, ignoreLiving?: boolean, ignoreSpawned?: boolean, ignoreDespawned?: boolean, ignoreTeams?: number | Array<number>, includeTeams?: number | Array<number>, ignorePlayers?: Player | Array<Player> }"
+                    }
+                },
+                FindNearestPlayer: {
+                    arg: {
+                        optionalParameters: "{ ignoreDead?: boolean, ignoreLiving?: boolean, ignoreSpawned?: boolean, ignoreDespawned?: boolean, ignoreTeams?: number | Array<number>, includeTeams?: number | Array<number>, ignorePlayers?: Player | Array<Player> }"
+                    }
+                },
+            }
+        },
+        UI: {
+            function: {
+                ShowFlyUpText: {
+                    arg: {
+                        optionalParameters: "{ duration?: number, color?: Color, font?: string, isBig?: boolean }"
+                    }
+                }
+            }
+        },
         World: {
             function: {
                 SpawnAsset: {
                     arg: {
-                        optionalParameters: "{parent?: CoreObject, position?: Vector3, rotation?: Rotation | Quaternion, scale?: Vector3}"
+                        optionalParameters: "{ parent?: CoreObject, position?: Vector3, rotation?: Rotation | Quaternion, scale?: Vector3 }"
+                    }
+                },
+                Raycast: {
+                    arg: {
+                        optionalParameters: "{ ignoreTeams?: number | Array<number>, ignorePlayers?: Player | Array<Player> | boolean }"
                     }
                 }
             }
@@ -44,7 +137,98 @@ const specialTypes: TypesByRootTag = {
             function: {
                 AddActivity: {
                     arg: {
-                        functions: "{tick?: (this: AIActivity, deltaTime: number) => void, tickHighestPriority?: (this: AIActivity, deltaTime: number) => void, start?: (this: AIActivity) => void, stop?: (this: AIActivity) => void}"
+                        functions: "{ tick?: (this: AIActivity, deltaTime: number) => void, tickHighestPriority?: (this: AIActivity, deltaTime: number) => void, start?: (this: AIActivity) => void, stop?: (this: AIActivity) => void }"
+                    }
+                }
+            }
+        },
+        AnimatedMesh: {
+            function: {
+                PlayAnimation: {
+                    arg: {
+                        optionalParameters: "{ startPosition?: number, playbackRate?: number, shouldLoop?: boolean }"
+                    }
+                }
+            }
+        },
+        CurveKey: {
+            function: {
+                New: {
+                    arg: {
+                        optionalParameters: "{ interpolation?: CurveInterpolation, arriveTangent?: number, leaveTangent?: number, tangent?: number }"
+                    }
+                }
+            }
+        },
+        Player: {
+            hook: {
+                movementHook: {
+                    arg: {
+                        parameters: "{direction: Vector3}"
+                    }
+                }
+            },
+            function: {
+                Spawn: {
+                    arg: {
+                        optionalParameters: "{ position?: Vector3, rotation?: Rotation, scale?: Vector3, spawnKey?: string }"
+                    }
+                },
+                GetPrivateNetworkedDataKeys: {
+                    return: {
+                        0: "Array<string>"
+                    }
+                }
+            }
+        },
+        CoreObject: {
+            function: {
+                GetCustomProperty: {
+                    return: {
+                        0: {
+                            mappedType: "",
+                            genericDefinition: {
+                                base: "(number | boolean | string | Vector2 | Vector3 | Vector4 | Rotation | Color | CoreObjectReference | NetReference)"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        SimpleCurve: {
+            function: {
+                New: {
+                    arg: {
+                        keys: "Array<CurveKey>",
+                        optionalParameters: "{ preExtrapolation?: CurveExtrapolation, postExtrapolation?: CurveExtrapolation, defaultValue?: number }"
+                    }
+                }
+            }
+        },
+        Vehicle: {
+            hook: {
+                clientMovementHook: {
+                    arg: {
+                        parameters: "{ throttleInput: number, steeringInput: number, isHandbrakeEngaged: boolean }"
+                    }
+                },
+                serverMovementHook: {
+                    arg: {
+                        parameters: "{ throttleInput: number, steeringInput: number, isHandbrakeEngaged: boolean }"
+                    }
+                }
+            }
+        },
+        Vfx: {
+            function: {
+                Play: {
+                    arg: {
+                        optionalParameters: "{ includeDescendants: boolean }"
+                    }
+                },
+                Stop: {
+                    arg: {
+                        optionalParameters: "{ includeDescendants: boolean }"
                     }
                 }
             }
