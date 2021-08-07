@@ -12,7 +12,7 @@ export function processEnums(enums: Enum[], fileCode: CodeBlock) {
                 {
                     typeUsage: "typeName",
                     parentDefinitionsStack: [],
-                    typedItemName: enumDef.Name,
+                    typedItemKey: enumDef.Name,
                 }
             ).mappedType;
             return fileCode.scope(`declare enum ${enumName} {`)

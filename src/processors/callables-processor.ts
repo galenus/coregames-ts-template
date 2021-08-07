@@ -12,6 +12,7 @@ interface SignatureOptions {
     isLambdaSignature?: boolean;
 }
 
+const AVAILABLE_GENERIC_PARAM_TYPES = ["T", "U", "V", "W", "X", "Y", "Z", "A", "B", "C"];
 export function buildSignature(
     {Parameters, Returns}: Callable,
     context: Context[],
@@ -22,7 +23,7 @@ export function buildSignature(
     const parameterDefs = Parameters?.map(p => {
         const {mappedType} = mapType(p.Type ?? "", {
             parentDefinitionsStack: context,
-            typedItemName: p.Name,
+            typedItemKey: p.Name,
             typeUsage: "arg"
         });
         return `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mappedType}${p.IsVariadic ? "[]" : ""}`;
@@ -30,20 +31,24 @@ export function buildSignature(
 
     const returnDefs: string[] = [];
     const genericParams: string[] = [];
-    let genericParamsCount = 0;
+    let genericParamsIndex = 0;
     for (let index = 0; index < (Returns?.length ?? 0); index++) {
         const ret = Returns![index];
         // eslint-disable-next-line prefer-const
-        let {mappedType, isGeneric} = mapType(ret.Type ?? "", {
+        let {mappedType, genericDefinition} = mapType(ret.Type ?? "", {
             typeUsage: "return",
             parentDefinitionsStack: context,
+            typedItemKey: index,
         });
-        if (isGeneric) {
-            genericParamsCount++;
-            const originalMappedType = mappedType;
-            mappedType = `T${genericParamsCount}`;
-            genericParams.push(`${mappedType} = ${originalMappedType}`);
+
+        if (genericDefinition) {
+            const extendsClause = typeof genericDefinition !== "boolean" ? ` extends ${genericDefinition.base}` : "";
+            const defaultType = mappedType !== "" ? ` = ${mappedType}` : "";
+            mappedType = AVAILABLE_GENERIC_PARAM_TYPES[genericParamsIndex];
+            genericParams.push(`${mappedType}${extendsClause}${defaultType}`);
+            genericParamsIndex++;
         }
+
         const retDef = `${ret.IsOptional ? `${OPTIONAL_TYPE_NAME}<` : ""}${mappedType}${ret.IsOptional ? ">" : ""}${ret.IsVariadic ? "[]" : ""}`;
         returnDefs.push(retDef);
     }

@@ -6,21 +6,23 @@ const CORE_API_OBJECT_CLASS_NAME = "__CoreAPI__Object";
 
 interface MapTypeResult {
     mappedType: string;
-    isGeneric?: boolean;
+    genericDefinition?: true | {
+        base?: string;
+    }
 }
 
 type TypeUsage = "typeName" | "return" | "arg" | "memberType";
 
 interface TypeContext {
     typeUsage: TypeUsage;
-    typedItemName?: string;
+    typedItemKey?: string | number;
     parentDefinitionsStack: Context[];
 }
 
 type RootTags = Extract<ContextTypeTags, "class" | "namespace" | "enum">
 type MemberTags = Exclude<ContextTypeTags, RootTags>
-type TypesByItemName = Record<string, string>
-type TypesByUsage = Partial<Record<TypeUsage, TypesByItemName>>
+type TypesByItemKey = Record<string | number, string | MapTypeResult>
+type TypesByUsage = Partial<Record<TypeUsage, TypesByItemKey>>
 type TypesByMemberName = Record<string, TypesByUsage>
 type TypesByMemberTag = Partial<Record<MemberTags, TypesByMemberName>>
 type TypesByRootName = Record<string, TypesByMemberTag>
@@ -53,7 +55,7 @@ const specialTypes: TypesByRootTag = {
 function handleSpecialType(type: string, {
     parentDefinitionsStack,
     typeUsage,
-    typedItemName
+    typedItemKey
 }: TypeContext): MapTypeResult | false {
     if (parentDefinitionsStack.length < 2 || parentDefinitionsStack.find(subj => !subj)) return false;
 
@@ -63,11 +65,11 @@ function handleSpecialType(type: string, {
         ?.[getTag(member) as MemberTags]
         ?.[member.Name ?? ""]
         ?.[typeUsage]
-        ?.[typedItemName ?? ""];
+        ?.[typedItemKey ?? ""];
 
     if (!mappedType) return false;
 
-    return {mappedType};
+    return typeof mappedType === "string" ? {mappedType} : mappedType;
 }
 
 export function mapType(type: string, context?: TypeContext): MapTypeResult {
@@ -80,9 +82,9 @@ export function mapType(type: string, context?: TypeContext): MapTypeResult {
         case "function":
             return {mappedType: "(...args: any[]) => void"};
         case "table":
-            return {mappedType: "Record<string, any>"};
+            return {mappedType: "Record<string, any>", genericDefinition: { base: "Record<string, any>" }};
         case "value":
-            return {mappedType: "any", isGeneric: true};
+            return {mappedType: "any", genericDefinition: true};
         case OBJECT_CLASS_NAME:
             return {mappedType: CORE_API_OBJECT_CLASS_NAME};
         case "":

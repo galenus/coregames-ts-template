@@ -5,7 +5,6 @@ import {mapType, OBJECT_CLASS_NAME} from "./types-mapping";
 import {buildSignature} from "./callables-processor";
 
 const IS_A_FUNCTION = "IsA";
-const SPECIAL_FUNCTION_NAMES = [IS_A_FUNCTION];
 
 function handleSpecialFunction(
     func: Function,
@@ -20,13 +19,18 @@ function handleSpecialFunction(
             {
                 parentDefinitionsStack: context,
                 typeUsage: "typeName",
-                typedItemName: root?.Name,
+                typedItemKey: root?.Name,
             }
         ).mappedType;
+
         functionsSection
             .section()
             .add(`${func.Name}<T extends ${typeName}>(): this is T;`);
+
+        return true;
     }
+
+    return false;
 }
 
 export function processFunctions(
@@ -37,10 +41,7 @@ export function processFunctions(
     declarationPrefix = "",
 ) {
     functions.forEach(func => {
-        if (SPECIAL_FUNCTION_NAMES.includes(func.Name)) {
-            handleSpecialFunction(func, functionsSection, staticFunctions, [owner, func]);
-            return;
-        }
+        if (handleSpecialFunction(func, functionsSection, staticFunctions, [owner, func])) return;
 
         func.Signatures.forEach(signature => {
             functionsSection

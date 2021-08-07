@@ -13,7 +13,7 @@ function processClassInstanceMembers(classBlock: CodeBlock, currentClass: Class,
                 const {mappedType} = mapType(prop.Type, {
                     parentDefinitionsStack: [currentClass],
                     typeUsage: "memberType",
-                    typedItemName: prop.Name,
+                    typedItemKey: prop.Name,
                 });
                 return `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mappedType};`;
             },
@@ -55,7 +55,7 @@ function processClassStaticMembers(
             {
                 typeUsage: "typeName",
                 parentDefinitionsStack: [currentClass],
-                typedItemName: currentClass.Name,
+                typedItemKey: currentClass.Name,
             }
         ).mappedType;
 
@@ -74,7 +74,7 @@ function processClassStaticMembers(
                         {
                             typeUsage: "memberType",
                             parentDefinitionsStack: [currentClass],
-                            typedItemName: constant.Name,
+                            typedItemKey: constant.Name,
                         }
                     ).mappedType;
                     return `readonly ${constant.Name}: ${typeName};`;
@@ -142,7 +142,7 @@ function handleObjectClass(type: Class, fileCode: CodeBlock): boolean {
         {
             typeUsage: "typeName",
             parentDefinitionsStack: [type],
-            typedItemName: type.Name,
+            typedItemKey: type.Name,
         }
     ).mappedType;
     const classBlock = fileCode
@@ -184,7 +184,7 @@ export function processClasses(classes: Class[], fileCode: CodeBlock) {
                 {
                     typeUsage: "typeName",
                     parentDefinitionsStack: [],
-                    typedItemName: currentClass.Name,
+                    typedItemKey: currentClass.Name,
                 }
             ).mappedType;
             const classBlock = fileCode
