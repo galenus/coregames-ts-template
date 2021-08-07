@@ -177,44 +177,55 @@ interface TypeContext {
     parentDefinitionsStack: Context[];
 }
 
-type MemberTags = Exclude<ContextTypeTags, "class" | "namespace" | "enum">
+type RootTags = Extract<ContextTypeTags, "class" | "namespace" | "enum">
+type MemberTags = Exclude<ContextTypeTags, RootTags>
 
 type TypesByItemName = Record<string, string>
 type TypesByUsage = Partial<Record<TypeUsage, TypesByItemName>>
 type TypesByMemberName = Record<string, TypesByUsage>
 type TypesByMemberTag = Partial<Record<MemberTags, TypesByMemberName>>
-type TypesByRoot = Record<string, TypesByMemberTag>
+type TypesByRootName = Record<string, TypesByMemberTag>
+type TypesByRootTag = Partial<Record<RootTags, TypesByRootName>>
 
-const specialNamespaceTypes: TypesByRoot = {
-    World: {
-        function: {
-            SpawnAsset: {
-                arg: {
-                    optionalParameters: "{parent?: CoreObject, position?: Vector3, rotation?: Rotation | Quaternion, scale?: Vector3}"
+const specialTypes: TypesByRootTag = {
+    namespace: {
+        World: {
+            function: {
+                SpawnAsset: {
+                    arg: {
+                        optionalParameters: "{parent?: CoreObject, position?: Vector3, rotation?: Rotation | Quaternion, scale?: Vector3}"
+                    }
+                }
+            }
+        }
+    },
+    class: {
+        AIActivityHandler: {
+            function: {
+                AddActivity: {
+                    arg: {
+                        functions: "{tick?: (this: AIActivity, deltaTime: number) => void, tickHighestPriority?: (this: AIActivity, deltaTime: number) => void, start?: (this: AIActivity) => void, stop?: (this: AIActivity) => void}"
+                    }
                 }
             }
         }
     }
-}
+};
 
 function handleSpecialType(type: string, {parentDefinitionsStack, typeUsage, typedItemName}: TypeContext): MapTypeResult | false {
     if (parentDefinitionsStack.length < 2 || parentDefinitionsStack.find(subj => !subj)) return false;
 
-    const root = parentDefinitionsStack[0];
-    if (isNamespace(root)) {
-        const member = parentDefinitionsStack[1];
-        const mappedType = specialNamespaceTypes[root.Name]
-            ?.[getTag(member) as MemberTags]
-            ?.[member.Name ?? ""]
-            ?.[typeUsage]
-            ?.[typedItemName ?? ""];
+    const [root, member] = parentDefinitionsStack;
+    const mappedType = specialTypes[getTag(root) as RootTags]
+        ?.[root.Name ?? ""]
+        ?.[getTag(member) as MemberTags]
+        ?.[member.Name ?? ""]
+        ?.[typeUsage]
+        ?.[typedItemName ?? ""];
 
-        if (!mappedType) return false;
+    if (!mappedType) return false;
 
-        return {mappedType};
-    }
-
-    return false;
+    return {mappedType};
 }
 
 function mapType(type: string, context?: TypeContext): MapTypeResult {
@@ -307,16 +318,17 @@ function handleSpecialFunction(
     func: Function,
     functionsSection: CodeBlock,
     staticFunctions: boolean,
-    owner: Context,
+    context: Context[],
     declarationPrefix: string,
 ) {
-    if (func.Name === IS_A_FUNCTION && owner.Name === OBJECT_CLASS_NAME) {
+    const [root] = context;
+    if (func.Name === IS_A_FUNCTION && root?.Name === OBJECT_CLASS_NAME) {
         const typeName = mapType(
             OBJECT_CLASS_NAME,
             {
-                parentDefinitionsStack: [owner],
+                parentDefinitionsStack: context,
                 typeUsage: "typeName",
-                typedItemName: owner.Name,
+                typedItemName: root?.Name,
             }
         ).mappedType;
         functionsSection
@@ -334,7 +346,7 @@ function processFunctions(
 ) {
     functions.forEach(func => {
         if (SPECIAL_FUNCTION_NAMES.includes(func.Name)) {
-            handleSpecialFunction(func, functionsSection, staticFunctions, func, declarationPrefix);
+            handleSpecialFunction(func, functionsSection, staticFunctions, [owner, func], declarationPrefix);
             return;
         }
 
