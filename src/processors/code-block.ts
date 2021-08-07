@@ -8,9 +8,9 @@ export class CodeBlock {
 
     constructor(
         private readonly indentCharacters = DEFAULT_TAB,
-        private readonly contentPrefix: string = "",
         private readonly firstLine?: string,
         private readonly lastLine?: string,
+        private readonly contentPrefix: string = "",
         private readonly wrapWithNewLines?: boolean,
         private readonly removeEmpty?: boolean,
     ) {
@@ -28,7 +28,7 @@ export class CodeBlock {
             return this;
         }
 
-        const commentBlock = new CodeBlock(" * ", FIRST_COMMENT_LINE, " */");
+        const commentBlock = new CodeBlock(this.indentCharacters, FIRST_COMMENT_LINE, " */", " * ");
         this.code.unshift(commentBlock);
         addComments(commentBlock);
         return this;
@@ -37,9 +37,9 @@ export class CodeBlock {
     section(name?: string, wrapWithNewLines = false) {
         const section = new CodeBlock(
             this.indentCharacters,
-            "",
             typeof name === "string" ? `// ${name}` : undefined,
             undefined,
+            "",
             wrapWithNewLines,
             true
         );
