@@ -1,5 +1,7 @@
 import fs from "fs";
+import path from "path";
 import axios from "axios";
+import yargs from "yargs/yargs";
 import {
     Class,
     CoreAPI,
@@ -13,6 +15,7 @@ import {
     Tag,
     Enum,
 } from "./core-api-declarations";
+import {argv} from "yargs";
 
 const API_DEFINITIONS_URL = "https://raw.githubusercontent.com/ManticoreGamesInc/platform-documentation/development/src/assets/api/CoreLuaAPI.json";
 
@@ -484,8 +487,34 @@ async function processCoreApi({ Classes, Namespaces, Enums }: CoreAPI) {
     return fileCode;
 }
 
+const programArguments = yargs(process.argv.slice(2))
+    .usage("Usage: core-api-gen --output /path/to/generated-file.d.ts")
+    .options({
+        output: {
+            type: "string",
+            default: "./generated/core-api-definitions.d.ts",
+            normalize: true,
+            coerce: (outputPath: string) => {
+                const parentFolder = path.dirname(outputPath);
+                const stat = fs.statSync(parentFolder);
+                if (!stat.isDirectory()) throw new Error(`${parentFolder} in specified path is not a directory`);
+
+                const requiredExtension = ".d.ts";
+                if (!outputPath.endsWith(requiredExtension)) {
+                    const currentExtension = path.extname(outputPath);
+                    if (!currentExtension) {
+                        return outputPath + requiredExtension;
+                    }
+
+                    return outputPath.substring(0, outputPath.lastIndexOf(currentExtension)) + requiredExtension;
+                }
+            }
+        }
+    })
+    .parseSync();
+
 loadApiDefinitions()
     .then(processCoreApi)
-    .then(result => fs.writeFileSync("./generated/core-api-definitions.d.ts", result.toString()))
+    .then(result => fs.writeFileSync(programArguments.output!, result.toString()))
     .then(() => console.log("Done!"))
     .catch(e => console.error("Failed with an error:", e));
