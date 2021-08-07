@@ -5,7 +5,14 @@ import {buildSignature} from "./callables-processor";
 export const EVENT_TYPE_NAME = "Event";
 
 export function buildTypedEvent(event: Event, parentDef: Context) {
-    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, [parentDef, event], {
+    const patchedEvent: Event = {
+        ...event,
+        Parameters: [
+            ...event.Parameters || [],
+            { Type: "any", IsVariadic: true, Name: "additionalParameters" },
+        ]
+    }
+    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(patchedEvent, [parentDef, patchedEvent], {
         isStatic: true,
         isLambdaSignature: true
     })}>`;
