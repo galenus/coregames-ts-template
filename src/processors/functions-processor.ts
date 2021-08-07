@@ -13,19 +13,21 @@ function handleSpecialFunction(
     context: Context[],
 ) {
     const [root] = context;
-    if (func.Name === IS_A_FUNCTION && root?.Name === OBJECT_CLASS_NAME) {
-        const typeName = mapType(
-            OBJECT_CLASS_NAME,
-            {
-                parentDefinitionsStack: context,
-                typeUsage: "typeName",
-                typedItemKey: root?.Name,
-            }
-        ).mappedType;
+    if (func.Name === IS_A_FUNCTION) {
+        if (root?.Name === OBJECT_CLASS_NAME) {
+            const typeName = mapType(
+                OBJECT_CLASS_NAME,
+                {
+                    parentDefinitionsStack: context,
+                    typeUsage: "typeName",
+                    typedItemKey: root?.Name,
+                }
+            ).mappedType;
 
-        functionsSection
-            .section()
-            .add(`${func.Name}<T extends ${typeName}>(): this is T;`);
+            functionsSection
+                .section()
+                .add(`${func.Name}<T extends ${typeName}>(): this is T;`);
+        }
 
         return true;
     }
