@@ -13,7 +13,7 @@ import {
     Hook,
     Event,
     Tag,
-    Enum,
+    Enum, Property,
 } from "./core-api-declarations";
 import {argv} from "yargs";
 
@@ -138,14 +138,97 @@ interface MapTypeResult {
     isGeneric?: boolean;
 }
 
-function mapType(type?: string): MapTypeResult {
+type Tagged<T, Tags> = T & { tag: Tags };
+type Context = Namespace | Class | Enum | Function | Event | Property | Hook;
+type ContextTypeTags = "namespace" | "class" | "enum" | "function" | "event" | "property" | "hook";
+type TaggedContext = Tagged<Context, ContextTypeTags>;
+
+function tag<T extends Context, Tag extends ContextTypeTags>(def: T, tag: Tag): Tagged<T, Tag> {
+    return {...def, tag};
+}
+
+function getTag(def: Context) {
+    return (def as TaggedContext).tag;
+}
+
+function isTaggedWith(def: Context, tag: ContextTypeTags): boolean {
+    return getTag(def) === tag;
+}
+
+const isNamespace = (def: Context): def is Namespace => isTaggedWith(def, "namespace");
+
+const isClass = (def: Context): def is Class => isTaggedWith(def, "class");
+
+const isEnum = (def: Context): def is Enum => isTaggedWith(def, "enum");
+
+const isFunction = (def: Context): def is Function => isTaggedWith(def, "function");
+
+const isEvent = (def: Context): def is Event => isTaggedWith(def, "event");
+
+const isProperty = (def: Context): def is Property => isTaggedWith(def, "property");
+
+const isHook = (def: Context): def is Hook => isTaggedWith(def, "hook");
+
+type TypeUsage = "typeName" | "return" | "arg" | "memberType";
+
+interface TypeContext {
+    typeUsage: TypeUsage;
+    typedItemName?: string;
+    parentDefinitionsStack: Context[];
+}
+
+type MemberTags = Exclude<ContextTypeTags, "class" | "namespace" | "enum">
+
+type TypesByItemName = Record<string, string>
+type TypesByUsage = Partial<Record<TypeUsage, TypesByItemName>>
+type TypesByMemberName = Record<string, TypesByUsage>
+type TypesByMemberTag = Partial<Record<MemberTags, TypesByMemberName>>
+type TypesByRoot = Record<string, TypesByMemberTag>
+
+const specialNamespaceTypes: TypesByRoot = {
+    World: {
+        function: {
+            SpawnAsset: {
+                arg: {
+                    optionalParameters: "{parent?: CoreObject, position?: Vector3, rotation?: Rotation | Quaternion, scale?: Vector3}"
+                }
+            }
+        }
+    }
+}
+
+function handleSpecialType(type: string, {parentDefinitionsStack, typeUsage, typedItemName}: TypeContext): MapTypeResult | false {
+    if (parentDefinitionsStack.length < 2 || parentDefinitionsStack.find(subj => !subj)) return false;
+
+    const root = parentDefinitionsStack[0];
+    if (isNamespace(root)) {
+        const member = parentDefinitionsStack[1];
+        const mappedType = specialNamespaceTypes[root.Name]
+            ?.[getTag(member) as MemberTags]
+            ?.[member.Name ?? ""]
+            ?.[typeUsage]
+            ?.[typedItemName ?? ""];
+
+        if (!mappedType) return false;
+
+        return {mappedType};
+    }
+
+    return false;
+}
+
+function mapType(type: string, context?: TypeContext): MapTypeResult {
+    const specialTypeHandlingResult = context && handleSpecialType(type, context);
+    if (specialTypeHandlingResult) return specialTypeHandlingResult;
+
     switch (type) {
         case "integer": return { mappedType: INTEGER_TYPE_NAME };
         case "function": return { mappedType: "(...args: any[]) => void" };
         case "table": return { mappedType: "Record<string, any>" };
-        case undefined: return { mappedType: "any" };
         case "value": return { mappedType: "any", isGeneric: true };
         case OBJECT_CLASS_NAME: return { mappedType: CORE_API_OBJECT_CLASS_NAME };
+        case "": return { mappedType: "any" };
+        case undefined: return { mappedType: "any" };
         default: return { mappedType: type };
     }
 }
@@ -165,12 +248,17 @@ interface SignatureOptions {
 
 function buildSignature(
     { Parameters, Returns }: Callable,
+    context: Context[],
     options?: SignatureOptions,
 ) {
     const { isStatic, isLambdaSignature } = options ?? {};
 
     const parameterDefs = Parameters?.map(p => {
-        const { mappedType } = mapType(p.Type);
+        const { mappedType } = mapType(p.Type ?? "", {
+            parentDefinitionsStack: context,
+            typedItemName: p.Name,
+            typeUsage: "arg"
+        });
         return `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mappedType}${p.IsVariadic ? "[]" : ""}`;
     });
 
@@ -180,7 +268,10 @@ function buildSignature(
     for (let index = 0; index < (Returns?.length ?? 0); index++) {
         const ret = Returns![index];
         // eslint-disable-next-line prefer-const
-        let { mappedType, isGeneric } = mapType(ret.Type);
+        let { mappedType, isGeneric } = mapType(ret.Type ?? "", {
+            typeUsage: "return",
+            parentDefinitionsStack: context,
+        });
         if (isGeneric) {
             genericParamsCount++;
             const originalMappedType = mappedType;
@@ -216,13 +307,21 @@ function handleSpecialFunction(
     func: Function,
     functionsSection: CodeBlock,
     staticFunctions: boolean,
-    ownerName: string,
+    owner: Context,
     declarationPrefix: string,
 ) {
-    if (func.Name === IS_A_FUNCTION && ownerName === OBJECT_CLASS_NAME) {
+    if (func.Name === IS_A_FUNCTION && owner.Name === OBJECT_CLASS_NAME) {
+        const typeName = mapType(
+            OBJECT_CLASS_NAME,
+            {
+                parentDefinitionsStack: [owner],
+                typeUsage: "typeName",
+                typedItemName: owner.Name,
+            }
+        ).mappedType;
         functionsSection
             .section()
-            .add(`${func.Name}<T extends ${mapType(OBJECT_CLASS_NAME).mappedType}>(): this is T;`);
+            .add(`${func.Name}<T extends ${typeName}>(): this is T;`);
     }
 }
 
@@ -230,12 +329,12 @@ function processFunctions(
     functions: Function[],
     functionsSection: CodeBlock,
     staticFunctions: boolean,
-    ownerName: string,
+    owner: Context,
     declarationPrefix = "",
 ) {
     functions.forEach(func => {
         if (SPECIAL_FUNCTION_NAMES.includes(func.Name)) {
-            handleSpecialFunction(func, functionsSection, staticFunctions, ownerName, declarationPrefix);
+            handleSpecialFunction(func, functionsSection, staticFunctions, func, declarationPrefix);
             return;
         }
 
@@ -243,7 +342,7 @@ function processFunctions(
             functionsSection
                 .section()
                 .addDefinitionLine(
-                    `${declarationPrefix}${func.Name}${buildSignature(signature, { isStatic: staticFunctions })};`,
+                    `${declarationPrefix}${func.Name}${buildSignature(signature, [owner, func], { isStatic: staticFunctions })};`,
                     {
                         Description: signature.Description ?? func.Description,
                         IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,
@@ -255,42 +354,46 @@ function processFunctions(
 }
 
 const EVENT_TYPE_NAME = "Event";
-function buildTypedEvent(event: Event) {
-    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, { isStatic: true, isLambdaSignature: true })}>`;
+function buildTypedEvent(event: Event, parentDef: Context) {
+    return `${event.Name}: ${EVENT_TYPE_NAME}<${buildSignature(event, [parentDef], { isStatic: true, isLambdaSignature: true })}>`;
 }
 
 const HOOK_TYPE_NAME = "Hook";
-function buildTypedHook(hook: Hook) {
-    return `${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, { isStatic: true, isLambdaSignature: true })}>`;
+function buildTypedHook(hook: Hook, parentDef: Context) {
+    return `${hook.Name}: ${HOOK_TYPE_NAME}<${buildSignature(hook, [parentDef], { isStatic: true, isLambdaSignature: true })}>`;
 }
 
 function processClassMembers(classBlock: CodeBlock, currentClass: Class, fileCode: CodeBlock) {
     classBlock.section("PROPERTIES", true)
         .addDefinitionLines(
-            currentClass.Properties,
+            currentClass.Properties.map(p => tag(p, "property")),
             prop => {
-                const { mappedType } = mapType(prop.Type);
+                const { mappedType } = mapType(prop.Type, {
+                    parentDefinitionsStack: [currentClass],
+                    typeUsage: "memberType",
+                    typedItemName: prop.Name,
+                });
                 return `${prop.Tags?.includes(Tag.ReadOnly) ? "readonly " : ""}${prop.Name}: ${mappedType};`;
             },
         );
 
     classBlock.section("EVENTS", true)
         .addDefinitionLines(
-            currentClass.Events ?? [],
-            event => `readonly ${buildTypedEvent(event)};`,
+            (currentClass.Events ?? []).map(t => tag(t, "event")),
+            event => `readonly ${buildTypedEvent(event, currentClass)};`,
         );
 
     classBlock.section("HOOKS", true)
         .addDefinitionLines(
-            currentClass.Hooks ?? [],
-            hook => `readonly ${buildTypedHook(hook)};`,
+            (currentClass.Hooks ?? []).map(h => tag(h, "hook")),
+            hook => `readonly ${buildTypedHook(hook, currentClass)};`,
         );
 
     processFunctions(
-        currentClass.MemberFunctions,
+        currentClass.MemberFunctions.map(f => tag(f, "function")),
         classBlock.section("INSTANCE METHODS", true),
         false,
-        currentClass.Name,
+        currentClass,
     );
 }
 
@@ -305,7 +408,14 @@ function processClassStatics(
     declarationOverrides?: StaticDeclarationOverrides,
 ) {
     if (!!currentClass.Constructors || !!currentClass.Constants || !!currentClass.StaticFunctions) {
-        const mappedClassName: string = mapType(currentClass.Name).mappedType;
+        const mappedClassName: string = mapType(
+            currentClass.Name,
+            {
+                typeUsage: "typeName",
+                parentDefinitionsStack: [currentClass],
+                typedItemName: currentClass.Name,
+            }
+        ).mappedType;
 
         const staticTypeName = declarationOverrides?.staticTypeName ?? `${mappedClassName}Static`;
         const staticInstanceDeclaration = declarationOverrides?.staticInstanceDeclaration
@@ -315,21 +425,31 @@ function processClassStatics(
 
         staticClassBlock.section("CONSTANTS", true)
             .addDefinitionLines(
-                currentClass.Constants ?? [],
-                constant => `readonly ${constant.Name}: ${mapType(constant.Type).mappedType};`,
+                (currentClass.Constants ?? []).map(c => tag(c, "property")),
+                constant => {
+                    const typeName = mapType(
+                        constant.Type,
+                        {
+                            typeUsage: "memberType",
+                            parentDefinitionsStack: [currentClass],
+                            typedItemName: constant.Name,
+                        }
+                    ).mappedType;
+                    return `readonly ${constant.Name}: ${typeName};`;
+                },
             );
 
         processFunctions(
-            currentClass.Constructors ?? [],
+            (currentClass.Constructors ?? []).map(c => tag(c, "function")),
             staticClassBlock.section("CONSTRUCTORS", true),
             true,
-            currentClass.Name,
+            currentClass,
         );
         processFunctions(
-            currentClass.StaticFunctions ?? [],
+            (currentClass.StaticFunctions ?? []).map(f => tag(f, "function")),
             staticClassBlock.section("STATIC METHODS", true),
             true,
-            currentClass.Name,
+            currentClass,
         );
 
         fileCode.add(staticInstanceDeclaration);
@@ -375,8 +495,16 @@ function handleConnectableClasses(type: Class, fileCode: CodeBlock): boolean {
 function handleObjectClass(type: Class, fileCode: CodeBlock): boolean {
     if (type.Name !== OBJECT_CLASS_NAME) return false;
 
+    const typeName = mapType(
+        OBJECT_CLASS_NAME,
+        {
+            typeUsage: "typeName",
+            parentDefinitionsStack: [type],
+            typedItemName: type.Name,
+        }
+    ).mappedType;
     const classBlock = fileCode
-        .scope(`declare interface ${mapType(OBJECT_CLASS_NAME).mappedType} {`)
+        .scope(`declare interface ${typeName} {`)
         .addDescriptionAndDeprecationFor(type);
 
     processClassMembers(classBlock, type, fileCode);
@@ -394,59 +522,90 @@ function handleClassIfSpecial(type: Class, fileCode: CodeBlock): boolean {
 }
 
 function processClasses(classes: Class[], fileCode: CodeBlock) {
-    classes.forEach(currentClass => {
-        if (handleClassIfSpecial(currentClass, fileCode)) return;
+    classes
+        .map(c => tag(c, "class"))
+        .forEach(currentClass => {
+                if (handleClassIfSpecial(currentClass, fileCode)) return;
 
-        const classExtendsClause = currentClass.BaseType
-            ? ` extends ${mapType(currentClass.BaseType).mappedType}`
-            : "";
-        const classBlock = fileCode
-            .scope(`declare interface ${mapType(currentClass.Name).mappedType}${classExtendsClause} {`)
-            .addDescriptionAndDeprecationFor(currentClass);
+                const baseTypeName = mapType(
+                    currentClass.BaseType ?? "",
+                    {
+                        typeUsage: "typeName",
+                        parentDefinitionsStack: [],
+                    }
+                ).mappedType;
+                const classExtendsClause = currentClass.BaseType
+                    ? ` extends ${baseTypeName}`
+                    : "";
+                const typeName = mapType(
+                    currentClass.Name,
+                    {
+                        typeUsage: "typeName",
+                        parentDefinitionsStack: [],
+                        typedItemName: currentClass.Name,
+                    }
+                ).mappedType;
+                const classBlock = fileCode
+                    .scope(`declare interface ${typeName}${classExtendsClause} {`)
+                    .addDescriptionAndDeprecationFor(currentClass);
 
-        processClassMembers(classBlock, currentClass, fileCode);
-        processClassStatics(currentClass, fileCode);
-    });
+                processClassMembers(classBlock, currentClass, fileCode);
+                processClassStatics(currentClass, fileCode);
+            });
 }
 
 function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
     namespaceBlock.section("EVENTS")
         .addDefinitionLines(
-            namespace.StaticEvents ?? [],
-            event => `export const ${buildTypedEvent(event)};`,
+            (namespace.StaticEvents ?? []).map(e => tag(e, "event")),
+            event => `export const ${buildTypedEvent(event, namespace)};`,
         );
 
     namespaceBlock.section("HOOKS")
         .addDefinitionLines(
-            namespace.StaticHooks ?? [],
-            hook => `export const ${buildTypedHook(hook)};`,
+            (namespace.StaticHooks ?? []).map(h => tag(h, "hook")),
+            hook => `export const ${buildTypedHook(hook, namespace)};`,
         );
 
     processFunctions(
-        namespace.StaticFunctions,
+        namespace.StaticFunctions.map(f => tag(f, "function")),
         namespaceBlock.section("FUNCTIONS"),
         true,
-        namespace.Name,
+        namespace,
         "export function ",
     );
 }
 
 function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock) {
-    namespaces.forEach(namespace => {
-        const namespaceBlock = fileCode
-            .scope(`declare namespace ${namespace.Name} {`)
-            .addDescriptionAndDeprecationFor(namespace);
+    namespaces
+        .map(n => tag(n, "namespace"))
+        .forEach(namespace => {
+            const namespaceBlock = fileCode
+                .scope(`declare namespace ${namespace.Name} {`)
+                .addDescriptionAndDeprecationFor(namespace);
 
-        processNamespaceMembers(namespaceBlock, namespace);
-    });
+            processNamespaceMembers(namespaceBlock, namespace);
+        });
 }
 
 function processEnums(enums: Enum[], fileCode: CodeBlock) {
-    enums.forEach(enumDef => fileCode.scope(`declare enum ${mapType(enumDef.Name).mappedType} {`)
-        .addDescriptionAndDeprecationFor(enumDef)
-        .add(
-            ...enumDef.Values.map(({ Name, Value }) => `${Name} = ${Value},`),
-        ));
+    enums
+        .map(e => tag(e, "enum"))
+        .forEach(enumDef => {
+            const enumName = mapType(
+                enumDef.Name,
+                {
+                    typeUsage: "typeName",
+                    parentDefinitionsStack: [],
+                    typedItemName: enumDef.Name,
+                }
+            ).mappedType;
+            return fileCode.scope(`declare enum ${enumName} {`)
+                .addDescriptionAndDeprecationFor(enumDef)
+                .add(
+                    ...enumDef.Values.map(({Name, Value}) => `${Name} = ${Value},`),
+                );
+        });
 }
 
 function addGeneralComments(fileCode: CodeBlock) {
