@@ -2,8 +2,9 @@ import {Enum} from "./core-api-declarations";
 import {CodeBlock} from "./code-block";
 import {tag} from "./api-types";
 import {mapType} from "./types-mapping";
+import {ApiGenerationOptions} from "./types";
 
-export function processEnums(enums: Enum[], fileCode: CodeBlock) {
+export function processEnums(enums: Enum[], fileCode: CodeBlock, options: ApiGenerationOptions) {
     enums
         .map(e => tag(e, "enum"))
         .forEach(enumDef => {
@@ -18,7 +19,9 @@ export function processEnums(enums: Enum[], fileCode: CodeBlock) {
             return fileCode.scope(`declare enum ${enumName} {`)
                 .addDescriptionAndDeprecationFor(enumDef)
                 .add(
-                    ...enumDef.Values.map(({Name, Value}) => `${Name} = ${Value},`),
+                    ...enumDef.Values
+                        .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
+                        .map(({Name, Value}) => `${Name} = ${Value},`),
                 );
         });
 }

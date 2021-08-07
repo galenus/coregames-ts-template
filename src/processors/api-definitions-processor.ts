@@ -5,6 +5,7 @@ import {CoreAPI} from "./core-api-declarations";
 import {processClasses} from "./classes-processor";
 import {processNamespaces} from "./namespace-processor";
 import {processEnums} from "./enums-processor";
+import {ApiGenerationOptions} from "./types";
 
 function addGeneralComments(fileCode: CodeBlock) {
     fileCode.add(
@@ -30,16 +31,20 @@ function addGlobals(fileCode: CodeBlock) {
         .comment(c => c.add("Similar to print(), but includes the script name and line number."));
 }
 
-export async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI) {
+const DEFAULT_OPTIONS: ApiGenerationOptions = {
+    omitDeprecated: true,
+};
+
+export async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI, options: ApiGenerationOptions = DEFAULT_OPTIONS) {
     const fileCode = new CodeBlock();
 
     addGeneralComments(fileCode);
     addPredefinedTypes(fileCode);
     addGlobals(fileCode);
 
-    processClasses(Classes, fileCode);
-    processNamespaces(Namespaces, fileCode);
-    processEnums(Enums, fileCode);
+    processClasses(Classes, fileCode, options);
+    processNamespaces(Namespaces, fileCode, options);
+    processEnums(Enums, fileCode, options);
 
     return fileCode;
 }

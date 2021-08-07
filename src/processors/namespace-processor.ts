@@ -3,30 +3,38 @@ import {CodeBlock} from "./code-block";
 import {tag} from "./api-types";
 import {buildTypedEvent, buildTypedHook} from "./fields-processor";
 import {processFunctions} from "./functions-processor";
+import {ApiGenerationOptions} from "./types";
 
-function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
-    namespaceBlock.section("EVENTS")
-        .addDefinitionLines(
-            (namespace.StaticEvents ?? []).map(e => tag(e, "event")),
-            event => `export const ${buildTypedEvent(event, namespace)};`,
+export function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock, options: ApiGenerationOptions) {
+
+    function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
+        namespaceBlock.section("EVENTS")
+            .addDefinitionLines(
+                (namespace.StaticEvents ?? [])
+                    .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
+                    .map(e => tag(e, "event")),
+                event => `export const ${buildTypedEvent(event, namespace)};`,
+            );
+
+        namespaceBlock.section("HOOKS")
+            .addDefinitionLines(
+                (namespace.StaticHooks ?? [])
+                    .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
+                    .map(h => tag(h, "hook")),
+                hook => `export const ${buildTypedHook(hook, namespace)};`,
+            );
+
+        processFunctions(
+            namespace.StaticFunctions
+                .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
+                .map(f => tag(f, "function")),
+            namespaceBlock.section("FUNCTIONS"),
+            true,
+            namespace,
+            "export function ",
         );
+    }
 
-    namespaceBlock.section("HOOKS")
-        .addDefinitionLines(
-            (namespace.StaticHooks ?? []).map(h => tag(h, "hook")),
-            hook => `export const ${buildTypedHook(hook, namespace)};`,
-        );
-
-    processFunctions(
-        namespace.StaticFunctions.map(f => tag(f, "function")),
-        namespaceBlock.section("FUNCTIONS"),
-        true,
-        namespace,
-        "export function ",
-    );
-}
-
-export function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock) {
     namespaces
         .map(n => tag(n, "namespace"))
         .forEach(namespace => {
