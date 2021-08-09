@@ -1,0 +1,7 @@
+{
+  "name": "init",
+  "main": "index.js",
+  "dependencies": {
+    "simple-git": "^2.42.0"
+  }
+}
