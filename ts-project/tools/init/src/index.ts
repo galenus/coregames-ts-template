@@ -13,7 +13,7 @@ const currentFolder = process.cwd();
 async function initForExistingGitRepo() {
     const tempFolderPath = fs.mkdtempSync(path.join(os.tmpdir(), "init-core-ts"));
     const cloneDestinationPath = path.join(tempFolderPath, "cloned");
-    await git.clone(REPOSITORY_URL, cloneDestinationPath);
+    await git.clone(REPOSITORY_URL, cloneDestinationPath, { "--branch": BRANCH_NAME, "--depth": 1 });
 
     processFilesRecursively(
         cloneDestinationPath,

@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 /* eslint-disable */
-
 var fs = require('fs');
 var path = require('path');
 var os = require('os');
@@ -16,15 +15,17 @@ var simpleGit__default = /*#__PURE__*/_interopDefaultLegacy(simpleGit);
 function processFilesRecursively(rootFolderPath, fileHandler, folderHandler) {
   const entries = fs__default['default'].readdirSync(rootFolderPath);
   entries.forEach(entry => {
-    if (fs__default['default'].statSync(entry).isDirectory()) {
-      if (!folderHandler || folderHandler(entry)) {
-        processFilesRecursively(entry, fileHandler);
+    const fullEntryPath = path__default['default'].join(rootFolderPath, entry);
+
+    if (fs__default['default'].statSync(fullEntryPath).isDirectory()) {
+      if (!folderHandler || folderHandler(fullEntryPath)) {
+        processFilesRecursively(fullEntryPath, fileHandler);
       }
 
       return;
     }
 
-    fileHandler(entry);
+    fileHandler(fullEntryPath);
   });
 }
 
@@ -36,7 +37,10 @@ const currentFolder = process.cwd();
 async function initForExistingGitRepo() {
   const tempFolderPath = fs__default['default'].mkdtempSync(path__default['default'].join(os__default['default'].tmpdir(), "init-core-ts"));
   const cloneDestinationPath = path__default['default'].join(tempFolderPath, "cloned");
-  await git.clone(REPOSITORY_URL, cloneDestinationPath);
+  await git.clone(REPOSITORY_URL, cloneDestinationPath, {
+    "--branch": BRANCH_NAME,
+    "--depth": 1
+  });
   processFilesRecursively(cloneDestinationPath, file => {
     const destinationFilePath = path__default['default'].join(currentFolder, path__default['default'].basename(file));
     if (fs__default['default'].existsSync(destinationFilePath)) return;
