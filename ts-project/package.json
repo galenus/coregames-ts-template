@@ -1,17 +1,23 @@
 {
   "scripts": {
     "gen-api": "ts-node ./tools/api-generator/src/index.ts --output ./core-api/core-api-definitions",
-    "lint": "eslint --ext .ts --fix --resolve-plugins-relative-to ./node_modules src/ plugins/",
+    "lint": "tsc --noEmit -p tsconfig.lint.json && eslint --ext .ts --fix src/ plugins/ tools/",
     "build": "tstl"
   },
   "devDependencies": {
+    "@types/yargs": "^17.0.2",
     "@typescript-eslint/eslint-plugin": "^4.29.0",
     "@typescript-eslint/parser": "^4.29.0",
+    "@types/node": "^16.4.13",
     "eslint": "^7.32.0",
     "eslint-config-airbnb-typescript": "^12.3.1",
     "eslint-plugin-import": "^2.23.4",
     "lua-types": "^2.10.1",
     "ts-node": "^10.1.0",
     "typescript-to-lua": "^0.41.1"
+  },
+  "dependencies": {
+    "axios": "^0.21.1",
+    "yargs": "^17.1.0"
   }
 }

@@ -1,6 +1,10 @@
 {
     "extends": "./tsconfig.json",
-    "exclude": [
-        "api-generator/*"
-    ]
+    "compilerOptions": {
+        "rootDirs": [
+            "src",
+            "plugins",
+            "tools"
+        ]
+    }
 }

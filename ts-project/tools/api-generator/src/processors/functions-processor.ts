@@ -1,14 +1,14 @@
-import {Function} from "./core-api-declarations";
-import {CodeBlock} from "./code-block";
-import {Context} from "./api-types";
-import {mapType, OBJECT_CLASS_NAME} from "./types-mapping";
-import {buildSignature} from "./callables-processor";
+import { Function } from "./core-api-declarations";
+import CodeWriter from "./code-writer";
+import { Context } from "./api-types";
+import { mapType, OBJECT_CLASS_NAME } from "./types-mapping";
+import { buildSignature } from "./callables-processor";
 
 const IS_A_FUNCTION = "IsA";
 
 function handleSpecialFunction(
     func: Function,
-    functionsSection: CodeBlock,
+    functionsSection: CodeWriter,
     staticFunctions: boolean,
     context: Context[],
 ) {
@@ -21,7 +21,7 @@ function handleSpecialFunction(
                     parentDefinitionsStack: context,
                     typeUsage: "typeName",
                     typedItemKey: root?.Name,
-                }
+                },
             ).mappedType;
 
             functionsSection
@@ -35,9 +35,9 @@ function handleSpecialFunction(
     return false;
 }
 
-export function processFunctions(
+export default function processFunctions(
     functions: Function[],
-    functionsSection: CodeBlock,
+    functionsSection: CodeWriter,
     staticFunctions: boolean,
     owner: Context,
     declarationPrefix = "",
@@ -46,10 +46,15 @@ export function processFunctions(
         if (handleSpecialFunction(func, functionsSection, staticFunctions, [owner, func])) return;
 
         func.Signatures.forEach(signature => {
+            const functionSignature = buildSignature(
+                signature,
+                [owner, func],
+                { isStatic: staticFunctions },
+            );
             functionsSection
                 .section()
                 .addDefinitionLine(
-                    `${declarationPrefix}${func.Name}${buildSignature(signature, [owner, func], {isStatic: staticFunctions})};`,
+                    `${declarationPrefix}${func.Name}${functionSignature};`,
                     {
                         Description: signature.Description ?? func.Description,
                         IsDeprecated: signature.IsDeprecated ?? func.IsDeprecated,

@@ -1,24 +1,26 @@
-import {Class, Tag} from "./core-api-declarations";
-import {CodeBlock} from "./code-block";
-import {mapType, OBJECT_CLASS_NAME} from "./types-mapping";
-import {tag} from "./api-types";
-import {buildTypedEvent, buildTypedHook, EVENT_TYPE_NAME, HOOK_TYPE_NAME} from "./fields-processor";
-import {processFunctions} from "./functions-processor";
-import {ApiGenerationOptions} from "./types";
+import { Class, Tag } from "./core-api-declarations";
+import CodeWriter from "./code-writer";
+import { mapType, OBJECT_CLASS_NAME } from "./types-mapping";
+import { withTag } from "./api-types";
+import {
+    buildTypedEvent, buildTypedHook, EVENT_TYPE_NAME, HOOK_TYPE_NAME,
+} from "./fields-processor";
+import processFunctions from "./functions-processor";
+import { ApiGenerationOptions } from "./types";
 
-export function processClasses(
+export default function processClasses(
     classes: Class[],
-    fileCode: CodeBlock,
+    fileCode: CodeWriter,
     options: ApiGenerationOptions,
 ) {
-    function processClassInstanceMembers(classBlock: CodeBlock, currentClass: Class) {
+    function processClassInstanceMembers(classBlock: CodeWriter, currentClass: Class) {
         classBlock.section("PROPERTIES", true)
             .addDefinitionLines(
                 currentClass.Properties
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(p => tag(p, "property")),
+                    .map(p => withTag(p, "property")),
                 prop => {
-                    const {mappedType} = mapType(prop.Type, {
+                    const { mappedType } = mapType(prop.Type, {
                         parentDefinitionsStack: [currentClass],
                         typeUsage: "memberType",
                         typedItemKey: prop.Name,
@@ -31,7 +33,7 @@ export function processClasses(
             .addDefinitionLines(
                 (currentClass.Events ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(t => tag(t, "event")),
+                    .map(t => withTag(t, "event")),
                 event => `readonly ${buildTypedEvent(event, currentClass)};`,
             );
 
@@ -39,14 +41,14 @@ export function processClasses(
             .addDefinitionLines(
                 (currentClass.Hooks ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(h => tag(h, "hook")),
+                    .map(h => withTag(h, "hook")),
                 hook => `readonly ${buildTypedHook(hook, currentClass)};`,
             );
 
         processFunctions(
             currentClass.MemberFunctions
                 .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                .map(f => tag(f, "function")),
+                .map(f => withTag(f, "function")),
             classBlock.section("INSTANCE METHODS", true),
             false,
             currentClass,
@@ -69,7 +71,7 @@ export function processClasses(
                     typeUsage: "typeName",
                     parentDefinitionsStack: [currentClass],
                     typedItemKey: currentClass.Name,
-                }
+                },
             ).mappedType;
 
             const staticTypeName = declarationOverrides?.staticTypeName ?? `${mappedClassName}Static`;
@@ -80,7 +82,7 @@ export function processClasses(
 
             staticClassBlock.section("CONSTANTS", true)
                 .addDefinitionLines(
-                    (currentClass.Constants ?? []).map(c => tag(c, "property")),
+                    (currentClass.Constants ?? []).map(c => withTag(c, "property")),
                     constant => {
                         const typeName = mapType(
                             constant.Type,
@@ -88,7 +90,7 @@ export function processClasses(
                                 typeUsage: "memberType",
                                 parentDefinitionsStack: [currentClass],
                                 typedItemKey: constant.Name,
-                            }
+                            },
                         ).mappedType;
                         return `readonly ${constant.Name}: ${typeName};`;
                     },
@@ -97,7 +99,7 @@ export function processClasses(
             processFunctions(
                 (currentClass.Constructors ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(c => tag(c, "function")),
+                    .map(c => withTag(c, "function")),
                 staticClassBlock.section("CONSTRUCTORS", true),
                 true,
                 currentClass,
@@ -105,7 +107,7 @@ export function processClasses(
             processFunctions(
                 (currentClass.StaticFunctions ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(f => tag(f, "function")),
+                    .map(f => withTag(f, "function")),
                 staticClassBlock.section("STATIC METHODS", true),
                 true,
                 currentClass,
@@ -134,7 +136,7 @@ export function processClasses(
                         ...connectFunc.Signatures[0],
                         Parameters: [
                             ...connectFuncParams.slice(0, connectFuncHandlerParamIndex),
-                            {Name: "listener", Type: HANDLER_TYPE_NAME},
+                            { Name: "listener", Type: HANDLER_TYPE_NAME },
                             ...connectFuncParams.slice(connectFuncHandlerParamIndex + 1),
                         ],
                     }],
@@ -161,7 +163,7 @@ export function processClasses(
                 typeUsage: "typeName",
                 parentDefinitionsStack: [type],
                 typedItemKey: type.Name,
-            }
+            },
         ).mappedType;
         const classBlock = fileCode
             .scope(`declare interface ${typeName} {`)
@@ -182,7 +184,7 @@ export function processClasses(
     }
 
     classes
-        .map(c => tag(c, "class"))
+        .map(c => withTag(c, "class"))
         .forEach(currentClass => {
             if (handleClassIfSpecial(currentClass)) return;
 
@@ -191,7 +193,7 @@ export function processClasses(
                 {
                     typeUsage: "typeName",
                     parentDefinitionsStack: [],
-                }
+                },
             ).mappedType;
             const classExtendsClause = currentClass.BaseType
                 ? ` extends ${baseTypeName}`
@@ -202,7 +204,7 @@ export function processClasses(
                     typeUsage: "typeName",
                     parentDefinitionsStack: [],
                     typedItemKey: currentClass.Name,
-                }
+                },
             ).mappedType;
             const classBlock = fileCode
                 .scope(`declare interface ${typeName}${classExtendsClause} {`)

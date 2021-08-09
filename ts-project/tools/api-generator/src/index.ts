@@ -1,9 +1,10 @@
 import fs from "fs";
 import path from "path";
 import yargs from "yargs/yargs";
-import {loadApiDefinitions} from "./api-definitions-loader";
-import {processCoreApi} from "./processors/api-definitions-processor";
+import loadApiDefinitions from "./api-definitions-loader";
+import processCoreApi from "./processors/api-definitions-processor";
 
+// noinspection JSUnusedGlobalSymbols
 const programArguments = yargs(process.argv.slice(2))
     .usage("Usage: core-api-gen --output /path/to/generated-file.d.ts")
     .options({
@@ -25,8 +26,10 @@ const programArguments = yargs(process.argv.slice(2))
 
                     return outputPath.substring(0, outputPath.lastIndexOf(currentExtension)) + requiredExtension;
                 }
-            }
-        }
+
+                return outputPath;
+            },
+        },
     })
     .parseSync();
 

@@ -1,18 +1,21 @@
-import {Namespace} from "./core-api-declarations";
-import {CodeBlock} from "./code-block";
-import {tag} from "./api-types";
-import {buildTypedEvent, buildTypedHook} from "./fields-processor";
-import {processFunctions} from "./functions-processor";
-import {ApiGenerationOptions} from "./types";
+import { Namespace } from "./core-api-declarations";
+import CodeWriter from "./code-writer";
+import { withTag } from "./api-types";
+import { buildTypedEvent, buildTypedHook } from "./fields-processor";
+import processFunctions from "./functions-processor";
+import { ApiGenerationOptions } from "./types";
 
-export function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock, options: ApiGenerationOptions) {
-
-    function processNamespaceMembers(namespaceBlock: CodeBlock, namespace: Namespace) {
+export default function processNamespaces(
+    namespaces: Namespace[],
+    fileCode: CodeWriter,
+    options: ApiGenerationOptions,
+) {
+    function processNamespaceMembers(namespaceBlock: CodeWriter, namespace: Namespace) {
         namespaceBlock.section("EVENTS")
             .addDefinitionLines(
                 (namespace.StaticEvents ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(e => tag(e, "event")),
+                    .map(e => withTag(e, "event")),
                 event => `export const ${buildTypedEvent(event, namespace)};`,
             );
 
@@ -20,14 +23,14 @@ export function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock, 
             .addDefinitionLines(
                 (namespace.StaticHooks ?? [])
                     .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                    .map(h => tag(h, "hook")),
+                    .map(h => withTag(h, "hook")),
                 hook => `export const ${buildTypedHook(hook, namespace)};`,
             );
 
         processFunctions(
             namespace.StaticFunctions
                 .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                .map(f => tag(f, "function")),
+                .map(f => withTag(f, "function")),
             namespaceBlock.section("FUNCTIONS"),
             true,
             namespace,
@@ -36,7 +39,7 @@ export function processNamespaces(namespaces: Namespace[], fileCode: CodeBlock, 
     }
 
     namespaces
-        .map(n => tag(n, "namespace"))
+        .map(n => withTag(n, "namespace"))
         .forEach(namespace => {
             const namespaceBlock = fileCode
                 .scope(`declare namespace ${namespace.Name} {`)

@@ -1,0 +1,24 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "rootDir": "src",
+        "outDir": "../Data/Scripts",
+        "plugins": [
+            {
+                "name": "typescript-tstl-plugin"
+            }
+        ]
+    },
+    "exclude": [
+        "plugins/*",
+        "tools/*"
+    ],
+    "tstl": {
+        "luaTarget": "5.3",
+        "luaPlugins": [
+            {
+                "name": "./plugins/core-api-adapter.ts"
+            }
+        ]
+    }
+}

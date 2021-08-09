@@ -1,10 +1,10 @@
-import {DescribableDeprecatable} from "./core-api-declarations";
+import { DescribableDeprecatable } from "./core-api-declarations";
 
 const DEFAULT_TAB = "    ";
 const FIRST_COMMENT_LINE = "/**";
 
-export class CodeBlock {
-    private readonly code: (string | CodeBlock)[] = [];
+export default class CodeWriter {
+    private readonly code: (string | CodeWriter)[] = [];
 
     constructor(
         private readonly nestedIndent = DEFAULT_TAB,
@@ -22,26 +22,26 @@ export class CodeBlock {
         return this;
     }
 
-    comment(addComments: (commentsBlock: CodeBlock) => void) {
-        if (this.code[0] instanceof CodeBlock && this.code[0].firstLine === FIRST_COMMENT_LINE) {
+    comment(addComments: (commentsBlock: CodeWriter) => void) {
+        if (this.code[0] instanceof CodeWriter && this.code[0].firstLine === FIRST_COMMENT_LINE) {
             addComments(this.code[0]);
             return this;
         }
 
-        const commentBlock = new CodeBlock("", FIRST_COMMENT_LINE, " */", " * ");
+        const commentBlock = new CodeWriter("", FIRST_COMMENT_LINE, " */", " * ");
         this.code.unshift(commentBlock);
         addComments(commentBlock);
         return this;
     }
 
     section(name?: string, wrapWithNewLines = false) {
-        const section = new CodeBlock(
+        const section = new CodeWriter(
             "",
             typeof name === "string" ? `// ${name}` : undefined,
             undefined,
             "",
             wrapWithNewLines,
-            true
+            true,
         );
         this.code.push(section);
         return section;
@@ -52,19 +52,19 @@ export class CodeBlock {
     }
 
     scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}") {
-        const scopeBlock = new CodeBlock(
+        const scopeBlock = new CodeWriter(
             this.nestedIndent,
             scopeDeclarationFirstLine,
             lastScopeLine || undefined,
             undefined,
-            true
+            true,
         );
         this.code.push(scopeBlock);
 
         return scopeBlock;
     }
 
-    addDescriptionAndDeprecationFor({Description, DeprecationMessage, IsDeprecated}: DescribableDeprecatable) {
+    addDescriptionAndDeprecationFor({ Description, DeprecationMessage, IsDeprecated }: DescribableDeprecatable) {
         if (!Description && !IsDeprecated) return this;
 
         this.comment(c => c
@@ -92,7 +92,7 @@ export class CodeBlock {
             return [];
         }
 
-        const firstLineIndex = !!this.firstLine ? this.code.indexOf(this.firstLine) : -1;
+        const firstLineIndex = this.firstLine ? this.code.indexOf(this.firstLine) : -1;
         return [
             ...this.wrapWithNewLines ? [""] : [],
             ...this.code.flatMap((code, index) => {
@@ -100,7 +100,7 @@ export class CodeBlock {
                     ? ""
                     : `${!!this.firstLine && !!this.lastLine ? this.nestedIndent : ""}${this.contentPrefix}`;
 
-                if (code instanceof CodeBlock) {
+                if (code instanceof CodeWriter) {
                     return code.getCodeLines().map(line => prefix + line);
                 }
 

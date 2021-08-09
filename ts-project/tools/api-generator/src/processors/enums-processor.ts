@@ -1,12 +1,12 @@
-import {Enum} from "./core-api-declarations";
-import {CodeBlock} from "./code-block";
-import {tag} from "./api-types";
-import {mapType} from "./types-mapping";
-import {ApiGenerationOptions} from "./types";
+import { Enum } from "./core-api-declarations";
+import CodeWriter from "./code-writer";
+import { withTag } from "./api-types";
+import { mapType } from "./types-mapping";
+import { ApiGenerationOptions } from "./types";
 
-export function processEnums(enums: Enum[], fileCode: CodeBlock, options: ApiGenerationOptions) {
+export default function processEnums(enums: Enum[], fileCode: CodeWriter, options: ApiGenerationOptions) {
     enums
-        .map(e => tag(e, "enum"))
+        .map(e => withTag(e, "enum"))
         .forEach(enumDef => {
             const enumName = mapType(
                 enumDef.Name,
@@ -14,14 +14,14 @@ export function processEnums(enums: Enum[], fileCode: CodeBlock, options: ApiGen
                     typeUsage: "typeName",
                     parentDefinitionsStack: [],
                     typedItemKey: enumDef.Name,
-                }
+                },
             ).mappedType;
             return fileCode.scope(`declare enum ${enumName} {`)
                 .addDescriptionAndDeprecationFor(enumDef)
                 .add(
                     ...enumDef.Values
                         .filter(subj => !(options.omitDeprecated && subj.IsDeprecated))
-                        .map(({Name, Value}) => `${Name} = ${Value},`),
+                        .map(({ Name, Value }) => `${Name} = ${Value},`),
                 );
         });
 }

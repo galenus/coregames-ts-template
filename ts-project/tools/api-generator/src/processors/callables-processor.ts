@@ -1,7 +1,7 @@
-import {Signature} from "./core-api-declarations";
-import {Context} from "./api-types";
-import {mapType} from "./types-mapping";
-import {getName} from "./names-mapping";
+import { Signature } from "./core-api-declarations";
+import { Context } from "./api-types";
+import { mapType } from "./types-mapping";
+import getName from "./names-mapping";
 
 export const OPTIONAL_TYPE_NAME = "Optional";
 const MULTI_RETURN_TYPE_NAME = "LuaMultiReturn";
@@ -14,17 +14,17 @@ interface SignatureOptions {
 
 const AVAILABLE_GENERIC_PARAM_TYPES = ["T", "U", "V", "W", "X", "Y", "Z", "A", "B", "C"];
 export function buildSignature(
-    {Parameters, Returns}: Callable,
+    { Parameters, Returns }: Callable,
     context: Context[],
     options?: SignatureOptions,
 ) {
-    const {isStatic, isLambdaSignature} = options ?? {};
+    const { isStatic, isLambdaSignature } = options ?? {};
 
     const parameterDefs = Parameters?.map(p => {
-        const {mappedType} = mapType(p.Type ?? "", {
+        const { mappedType } = mapType(p.Type ?? "", {
             parentDefinitionsStack: context,
             typedItemKey: p.Name,
-            typeUsage: "arg"
+            typeUsage: "arg",
         });
         return `${p.IsVariadic ? "..." : ""}${(getName(p))}${p.IsOptional ? "?" : ""}: ${mappedType}${p.IsVariadic ? "[]" : ""}`;
     });
@@ -35,7 +35,7 @@ export function buildSignature(
     for (let index = 0; index < (Returns?.length ?? 0); index++) {
         const ret = Returns![index];
         // eslint-disable-next-line prefer-const
-        let {mappedType, genericDefinition} = mapType(ret.Type ?? "", {
+        let { mappedType, genericDefinition } = mapType(ret.Type ?? "", {
             typeUsage: "return",
             parentDefinitionsStack: context,
             typedItemKey: index,

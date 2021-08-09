@@ -1,25 +1,25 @@
-import {CodeBlock} from "./code-block";
-import {INTEGER_TYPE_NAME} from "./types-mapping";
-import {OPTIONAL_TYPE_NAME} from "./callables-processor";
-import {CoreAPI} from "./core-api-declarations";
-import {processClasses} from "./classes-processor";
-import {processNamespaces} from "./namespace-processor";
-import {processEnums} from "./enums-processor";
-import {ApiGenerationOptions} from "./types";
+import CodeWriter from "./code-writer";
+import { INTEGER_TYPE_NAME } from "./types-mapping";
+import { OPTIONAL_TYPE_NAME } from "./callables-processor";
+import { CoreAPI } from "./core-api-declarations";
+import processClasses from "./classes-processor";
+import processNamespaces from "./namespace-processor";
+import processEnums from "./enums-processor";
+import { ApiGenerationOptions } from "./types";
 
-function addGeneralComments(fileCode: CodeBlock) {
+function addGeneralComments(fileCode: CodeWriter) {
     fileCode.add(
         "/* eslint-disable @typescript-eslint/no-unused-vars,max-len,@typescript-eslint/no-redeclare,no-trailing-spaces,no-multiple-empty-lines,@typescript-eslint/indent,@typescript-eslint/naming-convention,no-underscore-dangle,vars-on-top,no-var */",
         "// noinspection JSUnusedGlobalSymbols",
     );
 }
 
-function addPredefinedTypes(fileCode: CodeBlock) {
+function addPredefinedTypes(fileCode: CodeWriter) {
     fileCode.scope(`declare type ${INTEGER_TYPE_NAME} = number;`, false);
     fileCode.scope(`declare type ${OPTIONAL_TYPE_NAME}<T> = T | undefined;`, false);
 }
 
-function addGlobals(fileCode: CodeBlock) {
+function addGlobals(fileCode: CodeWriter) {
     fileCode
         .addAsSection("declare const script: CoreObject;")
         .comment(c => c.add("Provides access to current instance of script."))
@@ -35,8 +35,11 @@ const DEFAULT_OPTIONS: ApiGenerationOptions = {
     omitDeprecated: true,
 };
 
-export async function processCoreApi({Classes, Namespaces, Enums}: CoreAPI, options: ApiGenerationOptions = DEFAULT_OPTIONS) {
-    const fileCode = new CodeBlock();
+export default async function processCoreApi(
+    { Classes, Namespaces, Enums }: CoreAPI,
+    options: ApiGenerationOptions = DEFAULT_OPTIONS,
+) {
+    const fileCode = new CodeWriter();
 
     addGeneralComments(fileCode);
     addPredefinedTypes(fileCode);
