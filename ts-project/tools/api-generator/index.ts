@@ -3,6 +3,7 @@ import path from "path";
 import yargs from "yargs/yargs";
 import loadApiDefinitions from "./api-definitions-loader";
 import processCoreApi from "./processors/api-definitions-processor";
+import { assertPathExistence } from "../common/filesystem";
 
 // noinspection JSUnusedGlobalSymbols
 const programArguments = yargs(process.argv.slice(2))
@@ -13,9 +14,7 @@ const programArguments = yargs(process.argv.slice(2))
             default: "./generated/core-api-definitions.d.ts",
             normalize: true,
             coerce: (outputPath: string) => {
-                const parentFolder = path.dirname(outputPath);
-                const stat = fs.statSync(parentFolder);
-                if (!stat.isDirectory()) throw new Error(`${parentFolder} in specified path is not a directory`);
+                assertPathExistence(outputPath, "parent");
 
                 const requiredExtension = ".d.ts";
                 if (!outputPath.endsWith(requiredExtension)) {
