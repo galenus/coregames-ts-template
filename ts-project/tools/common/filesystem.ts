@@ -25,13 +25,14 @@ export function processFilesRecursively(
 ) {
     const entries = fs.readdirSync(rootFolderPath);
     entries.forEach(entry => {
-        if (fs.statSync(entry).isDirectory()) {
-            if (!folderHandler || folderHandler(entry)) {
-                processFilesRecursively(entry, fileHandler);
+        const fullEntryPath = path.join(rootFolderPath, entry);
+        if (fs.statSync(fullEntryPath).isDirectory()) {
+            if (!folderHandler || folderHandler(fullEntryPath)) {
+                processFilesRecursively(fullEntryPath, fileHandler);
             }
             return;
         }
 
-        fileHandler(entry);
+        fileHandler(fullEntryPath);
     });
 }
