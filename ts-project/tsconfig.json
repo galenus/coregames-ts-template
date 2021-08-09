@@ -1,0 +1,39 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "lib": [
+            "ESNext"
+        ],
+        "moduleResolution": "node",
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "rootDir": "src",
+        "outDir": "../Data/Scripts",
+        "types": [
+            "lua-types/5.3",
+            "typescript-to-lua/language-extensions"
+        ],
+        "typeRoots": [
+            "node_modules/@types",
+            "core-api"
+        ],
+        "plugins": [
+            {
+                "name": "typescript-tstl-plugin"
+            }
+        ]
+    },
+    "exclude": [
+        "plugins/core-api-adapter.ts",
+        "api-generator/*"
+    ],
+    "tstl": {
+        "luaTarget": "5.3",
+        "luaPlugins": [
+            {
+                "name": "./plugins/core-api-adapter.ts"
+            }
+        ]
+    }
+}
