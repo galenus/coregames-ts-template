@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "gen-api": "ts-node ./api-generator/src/index.ts --output ./core-api/core-api-definitions",
+    "gen-api": "ts-node ./tools/api-generator/src/index.ts --output ./core-api/core-api-definitions",
     "lint": "eslint --ext .ts --fix --resolve-plugins-relative-to ./node_modules src/ plugins/",
     "build": "tstl"
   },
