@@ -1,6 +1,7 @@
 {
   "name": "init",
   "main": "index.js",
+  "bin": "./index.js",
   "dependencies": {
     "simple-git": "^2.42.0"
   }

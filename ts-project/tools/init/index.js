@@ -1,4 +1,6 @@
+#!/usr/bin/env node
 /* eslint-disable */
+
 var fs = require('fs');
 var path = require('path');
 var os = require('os');
