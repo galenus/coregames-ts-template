@@ -39,10 +39,12 @@ export default function syncFiles(args: SyncArguments) {
     }
 
     function createScriptAssetFile(fileNameWithoutExtension: string) {
+        const assetDefinitionPath = `${fileNameWithoutExtension}${ASSET_FILE_EXTENSION}`;
         fs.writeFileSync(
-            path.join(outDir!, `${fileNameWithoutExtension}${ASSET_FILE_EXTENSION}`),
+            path.join(outDir!, assetDefinitionPath),
             createAssetDefinition(PlatformAssetType.script, { name: fileNameWithoutExtension }),
         );
+        console.log(`Created ${assetDefinitionPath} for script ${fileNameWithoutExtension}.ts`);
     }
 
     const destinationFiles = new Map<string, string>();
