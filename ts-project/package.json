@@ -1,6 +1,7 @@
 {
   "scripts": {
     "gen-api": "ts-node tools/api-generator/index.ts --output ./core-api/core-api-definitions",
+    "sync": "ts-node tools/sync/index.ts",
     "lint": "tsc --noEmit -p tsconfig.lint.json && eslint --ext .ts --fix src/ plugins/ tools/",
     "build-lua": "tstl -p tsconfig.lint.json && ts-node tools/sync/index.ts --config ./tsconfig.lua.json",
     "build-init-tool": "microbundle -i ./tools/init/src/index.ts -o ./tools/init/index.js --no-pkg-main -f cjs --target node --no-sourcemap --generateTypes false"
