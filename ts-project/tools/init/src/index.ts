@@ -2,18 +2,34 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import simpleGit from "simple-git";
+import yargs from "yargs/yargs";
 import { processFilesRecursively } from "../../common/filesystem";
 
-const REPOSITORY_URL = "https://github.com/galenus/coregames-ts-template.git";
-const BRANCH_NAME = "feature/convert-to-template";
+const DEFAULT_REPOSITORY_URL = "https://github.com/galenus/coregames-ts-template.git";
+const DEFAULT_BRANCH_NAME = "feature/convert-to-template";
 
 const git = simpleGit();
 const currentFolder = process.cwd();
 
+const { repo, branch } = yargs(process.argv.slice(2))
+    .usage("Usage: init [--repo {repo URL}] [--branch {branch name}]")
+    .options({
+        repo: {
+            type: "string",
+            default: DEFAULT_REPOSITORY_URL,
+            describe: "location of the Git repository to use as a template",
+        },
+        branch: {
+            type: "string",
+            default: DEFAULT_BRANCH_NAME,
+            describe: "name of the branch to use from the template Git repository",
+        },
+    }).parseSync();
+
 async function initForExistingGitRepo() {
     const tempFolderPath = fs.mkdtempSync(path.join(os.tmpdir(), "init-core-ts"));
     const cloneDestinationPath = path.join(tempFolderPath, "cloned");
-    await git.clone(REPOSITORY_URL, cloneDestinationPath, { "--branch": BRANCH_NAME, "--depth": 1 });
+    await git.clone(repo, cloneDestinationPath, { "--branch": branch, "--depth": 1 });
 
     processFilesRecursively(
         cloneDestinationPath,
@@ -33,17 +49,17 @@ async function initForExistingGitRepo() {
     );
 
     console.warn(`Current directory already contains Git repository.
-Some files from the template may not initialize properly, compare the contents of this folder with the repository at ${REPOSITORY_URL}, ${BRANCH_NAME} branch.`);
+Some files from the template may not initialize properly, compare the contents of this folder with the repository at ${repo}, ${branch} branch.`);
 }
 
 async function initForNewGitRepo() {
     await git.init();
-    await git.addRemote("template", REPOSITORY_URL);
-    await git.fetch("template", BRANCH_NAME, { "--depth": 1 });
-    await git.checkout(`template/${BRANCH_NAME}`);
+    await git.addRemote("template", repo);
+    await git.fetch("template", branch, { "--depth": 1 });
+    await git.checkout(`template/${branch}`);
 
     console.log(`Created a new Git repository in the current folder with support for TypeScript development.
-Repository has a remote called 'template' pointing to repository at ${REPOSITORY_URL}. Feel free to delete this remote using 'git remote remove template'.`);
+Repository has a remote called 'template' pointing to repository at ${repo}. Feel free to delete this remote using 'git remote remove template'.`);
 }
 
 function handleResult() {
