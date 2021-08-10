@@ -56,7 +56,7 @@ export default function syncFiles(args: SyncArguments) {
     });
 
     if (direction === "script2ts" || direction === "both") {
-        destinationFiles.forEach((fileName, filePath) => {
+        destinationFiles.forEach((filePath, fileName) => {
             const fileNameWithoutExtension = getFileNameWithoutExtension(fileName, ".lua");
             if (fileName === fileNameWithoutExtension) return;
 
@@ -67,7 +67,7 @@ export default function syncFiles(args: SyncArguments) {
     }
 
     if (direction === "ts2script" || direction === "both") {
-        sourceFiles.forEach(fileName => {
+        sourceFiles.forEach((_, fileName) => {
             const fileNameWithoutExtension = getFileNameWithoutExtension(fileName, ".ts");
             if (fileName === fileNameWithoutExtension) return;
 
