@@ -1,5 +1,5 @@
 export interface Project {
-    compileOptions: {
+    compilerOptions: {
         rootDir?: string,
         outDir?: string,
     }

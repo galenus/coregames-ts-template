@@ -21,7 +21,7 @@ function getFileNameWithoutExtension(fileName: string, extension: string) {
 export default function syncFiles(args: SyncArguments) {
     const { config, direction } = args;
     const project = loadTsProject(config);
-    const { rootDir, outDir } = project.compileOptions;
+    const { rootDir, outDir } = project.compilerOptions;
 
     function createSourceFile(fileNameWithoutExtension: string, scriptFilePath: string) {
         const scriptContents = fs.readFileSync(scriptFilePath);
