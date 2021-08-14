@@ -1,0 +1,15 @@
+{
+  "name": "@coreg-ts/tstl-lualib-patch",
+  "version": "0.1.0",
+  "description": "Version of the lualib_bundle.lua from TypeScriptToLua (https://typescripttolua.github.io/) adapted to usage in Core Games (https://www.coregames.com/) scripts.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/galenus/games-on-core-with-ts.git"
+  },
+  "author": "Michael Donkhin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/galenus/games-on-core-with-ts/issues"
+  },
+  "homepage": "https://github.com/galenus/games-on-core-with-ts#readme"
+}
