@@ -7,24 +7,13 @@
     "build-init-tool": "microbundle -i ./tools/init/src/index.ts -o ./tools/init/index.js --no-pkg-main -f cjs --target node --no-sourcemap --generateTypes false"
   },
   "devDependencies": {
-    "@types/flake-idgen": "^0.1.31",
-    "@types/node": "^16.4.13",
-    "@types/yargs": "^17.0.2",
     "@typescript-eslint/eslint-plugin": "^4.29.0",
     "@typescript-eslint/parser": "^4.29.0",
     "eslint": "^7.32.0",
     "eslint-config-airbnb-typescript": "^12.3.1",
     "eslint-plugin-import": "^2.23.4",
     "lua-types": "^2.10.1",
-    "microbundle": "^0.13.3",
     "ts-node": "^10.1.0",
     "typescript-to-lua": "^0.41.1"
-  },
-  "dependencies": {
-    "axios": "^0.21.1",
-    "biguint-format": "^1.0.2",
-    "flake-idgen": "^1.4.0",
-    "simple-git": "^2.42.0",
-    "yargs": "^17.1.0"
   }
 }
