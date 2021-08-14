@@ -1,39 +1,49 @@
 import fs from "fs";
 import path from "path";
-import yargs from "yargs/yargs";
-import loadApiDefinitions from "./api-definitions-loader";
+import { Arguments, CommandModule } from "yargs";
+import loadApiDefinitions, { DEFAULT_API_DEFINITIONS_URL } from "./api-definitions-loader";
 import processCoreApi from "./processors/api-definitions-processor";
 import { assertPathExistence } from "../common/filesystem";
 
-// noinspection JSUnusedGlobalSymbols
-const programArguments = yargs(process.argv.slice(2))
-    .usage("Usage: core-api-gen --output /path/to/generated-file.d.ts")
-    .options({
-        output: {
-            type: "string",
-            default: "./generated/core-api-definitions.d.ts",
-            normalize: true,
-            coerce: (outputPath: string) => {
-                assertPathExistence(outputPath, "parent");
+export interface ApiGeneratorArguments {
+    url: string;
+    output: string;
+}
 
-                const requiredExtension = ".d.ts";
-                if (!outputPath.endsWith(requiredExtension)) {
-                    const currentExtension = path.extname(outputPath);
-                    if (!currentExtension) {
-                        return outputPath + requiredExtension;
+const yargsModule: CommandModule<{}, ApiGeneratorArguments> = {
+    builder: yargs => yargs
+        .options({
+            url: {
+                type: "string",
+                default: DEFAULT_API_DEFINITIONS_URL,
+                description: "URL of the Core Games API dump",
+            },
+            output: {
+                type: "string",
+                default: "./generated/core-api-definitions.d.ts",
+                description: "path to the generated definitions file",
+                normalize: true,
+                coerce: (outputPath: string) => {
+                    assertPathExistence(outputPath, "parent");
+
+                    const requiredExtension = ".d.ts";
+                    if (!outputPath.endsWith(requiredExtension)) {
+                        const currentExtension = path.extname(outputPath);
+                        if (!currentExtension) {
+                            return outputPath + requiredExtension;
+                        }
+
+                        return outputPath.substring(0, outputPath.lastIndexOf(currentExtension)) + requiredExtension;
                     }
 
-                    return outputPath.substring(0, outputPath.lastIndexOf(currentExtension)) + requiredExtension;
-                }
-
-                return outputPath;
+                    return outputPath;
+                },
             },
-        },
-    })
-    .parseSync();
+        })
+        .help(),
+    handler: ({ url, output }: Arguments<ApiGeneratorArguments>) => loadApiDefinitions(url)
+        .then(processCoreApi)
+        .then(result => fs.writeFileSync(output, result.toString())),
+};
 
-loadApiDefinitions()
-    .then(processCoreApi)
-    .then(result => fs.writeFileSync(programArguments.output!, result.toString()))
-    .then(() => console.log("Done!"))
-    .catch(e => console.error("Failed with an error:", e));
+export default yargsModule;

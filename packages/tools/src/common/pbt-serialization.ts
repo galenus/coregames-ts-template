@@ -1,4 +1,5 @@
 import IDGen from "flake-idgen";
+
 const idFormat = require("biguint-format");
 
 const SERIALIZATION_VERSION = 95;

@@ -1,6 +1,6 @@
 import fs from "fs";
-import yargs from "yargs/yargs";
 import path from "path";
+import { Arguments, CommandModule } from "yargs";
 import { assertPathExistence, loadTsProject, processFilesRecursively } from "../common/filesystem";
 import createAssetDefinition, { PlatformAssetType } from "../common/pbt-serialization";
 
@@ -8,7 +8,7 @@ const ASSET_FILE_EXTENSION = ".asset.pbt";
 
 type SyncDirection = "ts2script" | "script2ts" | "both";
 
-interface SyncArguments {
+export interface SyncArguments {
     direction: SyncDirection;
     config: string;
 }
@@ -18,7 +18,7 @@ function getFileNameWithoutExtension(fileName: string, extension: string) {
     return fileName.slice(0, -extension.length);
 }
 
-export default function syncFiles(args: SyncArguments) {
+function syncFiles(args: SyncArguments) {
     const { config, direction } = args;
     const project = loadTsProject(config);
     const { rootDir, outDir } = project.compilerOptions;
@@ -80,9 +80,8 @@ export default function syncFiles(args: SyncArguments) {
     }
 }
 
-if (require.main === module) {
-    const programArguments = yargs(process.argv.slice(2))
-        .usage("Usage: sync --config /path/to/lua/tsconfig.json --direction [ts2script | script2ts | both]")
+const yargsModule: CommandModule<{}, SyncArguments> = {
+    builder: yargs => yargs
         .options({
             config: {
                 type: "string",
@@ -99,7 +98,9 @@ if (require.main === module) {
                 describe: "direction of the files synchronization",
                 demandOption: true,
             },
-        }).parseSync();
+        })
+        .help(),
+    handler: (argv: Arguments<SyncArguments>) => syncFiles(argv),
+};
 
-    syncFiles(programArguments);
-}
+export default yargsModule;

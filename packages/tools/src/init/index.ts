@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import simpleGit from "simple-git";
-import yargs from "yargs/yargs";
-import { processFilesRecursively } from "../../common/filesystem";
+import { Arguments, CommandModule } from "yargs";
+import { processFilesRecursively } from "../common/filesystem";
 
 const DEFAULT_REPOSITORY_URL = "https://github.com/galenus/coregames-ts-template.git";
 const DEFAULT_BRANCH_NAME = "feature/convert-to-template";
@@ -11,22 +11,12 @@ const DEFAULT_BRANCH_NAME = "feature/convert-to-template";
 const git = simpleGit();
 const currentFolder = process.cwd();
 
-const { repo, branch } = yargs(process.argv.slice(2))
-    .usage("Usage: init [--repo {repo URL}] [--branch {branch name}]")
-    .options({
-        repo: {
-            type: "string",
-            default: DEFAULT_REPOSITORY_URL,
-            describe: "location of the Git repository to use as a template",
-        },
-        branch: {
-            type: "string",
-            default: DEFAULT_BRANCH_NAME,
-            describe: "name of the branch to use from the template Git repository",
-        },
-    }).parseSync();
+export interface InitArguments {
+    repo: string;
+    branch: string,
+}
 
-async function initForExistingGitRepo() {
+async function initForExistingGitRepo({ repo, branch }: InitArguments) {
     const tempFolderPath = fs.mkdtempSync(path.join(os.tmpdir(), "init-core-ts"));
     const cloneDestinationPath = path.join(tempFolderPath, "cloned");
     await git.clone(repo, cloneDestinationPath, { "--branch": branch, "--depth": 1 });
@@ -52,7 +42,7 @@ async function initForExistingGitRepo() {
 Some files from the template may not initialize properly, compare the contents of this folder with the repository at ${repo}, ${branch} branch.`);
 }
 
-async function initForNewGitRepo() {
+async function initForNewGitRepo({ repo, branch }: InitArguments) {
     await git.init();
     await git.addRemote("template", repo);
     await git.fetch("template", branch, { "--depth": 1 });
@@ -71,8 +61,28 @@ function handleError(e: Error) {
     console.error("Could not initialize support for TypeScript due to an error:", e);
 }
 
-if (fs.readdirSync(currentFolder).find(entry => path.basename(entry) === ".git")) {
-    initForExistingGitRepo().then(handleResult).catch(handleError);
-} else {
-    initForNewGitRepo().then(handleResult).catch(handleError);
-}
+const yargsModule: CommandModule<{}, InitArguments> = {
+    builder: yargs => yargs
+        .options({
+            repo: {
+                type: "string",
+                default: DEFAULT_REPOSITORY_URL,
+                describe: "location of the Git repository to use as a template",
+            },
+            branch: {
+                type: "string",
+                default: DEFAULT_BRANCH_NAME,
+                describe: "name of the branch to use from the template Git repository",
+            },
+        })
+        .help(),
+    handler: (args: Arguments<InitArguments>) => {
+        if (fs.readdirSync(currentFolder).find(entry => path.basename(entry) === ".git")) {
+            initForExistingGitRepo(args).then(handleResult).catch(handleError);
+        } else {
+            initForNewGitRepo(args).then(handleResult).catch(handleError);
+        }
+    },
+};
+
+export default yargsModule;
