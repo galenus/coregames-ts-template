@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+        "target": "ESNext",
+        "allowSyntheticDefaultImports": true,
+        "esModuleInterop": true,
+        "lib": [
+            "ESNext"
+        ],
+        "moduleResolution": "node",
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "skipLibCheck": true,
+        "typeRoots": [
+            "node_modules/@types",
+            "lua-types/5.3",
+            "typescript-to-lua/language-extensions",
+            "core-api"
+        ]
+    }
+}

@@ -1,0 +1,10 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "rootDirs": [
+          "packages/tools/src",
+            "plugins",
+            "tools"
+        ]
+    }
+}
