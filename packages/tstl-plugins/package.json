@@ -11,5 +11,12 @@
   "bugs": {
     "url": "https://github.com/galenus/games-on-core-with-ts/issues"
   },
-  "homepage": "https://github.com/galenus/games-on-core-with-ts#readme"
+  "homepage": "https://github.com/galenus/games-on-core-with-ts#readme",
+  "peerDependencies": {
+    "typescript": "^4.3",
+    "typescript-to-lua": "^0.42"
+  },
+  "devDependencies": {
+    "@types/node": "^16.4.13"
+  }
 }
