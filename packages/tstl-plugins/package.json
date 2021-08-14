@@ -1,0 +1,15 @@
+{
+  "name": "@coreg-ts/tstl-plugins",
+  "version": "0.1.0",
+  "description": "Plugins related to transpiling TypeScript source code into Lua scripts for Core Games (https://www.coregames.com/) using TypeScriptToLua (https://typescripttolua.github.io/).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/galenus/games-on-core-with-ts.git"
+  },
+  "author": "Michael Donkhin",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/galenus/games-on-core-with-ts/issues"
+  },
+  "homepage": "https://github.com/galenus/games-on-core-with-ts#readme"
+}

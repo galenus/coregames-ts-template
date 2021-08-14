@@ -13,7 +13,6 @@ import {
     TransformationContext,
 } from "typescript-to-lua";
 import * as ts from "typescript";
-import { SourceNode } from "source-map";
 
 const SCRIPTS_ROOT_OBJECT_NAME = "__ScriptsRoot";
 const SCRIPTS_ROOT_VAR_NAME = "__SCRIPTS_ROOT";
@@ -115,7 +114,7 @@ class AdapterPrinter extends LuaPrinter {
         return result;
     }
 
-    public printFunctionDefinition(statement: FunctionDefinition): SourceNode {
+    public printFunctionDefinition(statement: FunctionDefinition) {
         let adaptedStatement = statement;
         if (isIdentifier(statement.left[0]) && NO_SELF_ARG_FUNCTION_NAMES.includes(statement.left[0].text)) {
             const functionExpression = statement.right[0] as FunctionExpression;
