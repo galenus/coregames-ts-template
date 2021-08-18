@@ -27,7 +27,7 @@ export default function createAssetDefinition(type: PlatformAssetType, data: Ass
             return `Assets {
   Id: ${generateAssetId()}
   Name: "${name}"
-  PlatformAssetType: 3
+  PlatformAssetType: ${type}
   TextAsset {
   }
   SerializationVersion: ${SERIALIZATION_VERSION}
