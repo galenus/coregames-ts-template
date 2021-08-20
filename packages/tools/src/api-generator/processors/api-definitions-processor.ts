@@ -1,4 +1,4 @@
-import CodeWriter from "./code-writer";
+import CodeWriter from "./type-definitions-writer";
 import { INTEGER_TYPE_NAME } from "./types-mapping";
 import { OPTIONAL_TYPE_NAME } from "./callables-processor";
 import { CoreAPI } from "./core-api-declarations";

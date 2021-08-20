@@ -1,5 +1,5 @@
 import { Class, Tag } from "./core-api-declarations";
-import CodeWriter from "./code-writer";
+import CodeWriter from "./type-definitions-writer";
 import { mapType, OBJECT_CLASS_NAME } from "./types-mapping";
 import { withTag } from "./api-types";
 import {

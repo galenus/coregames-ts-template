@@ -1,5 +1,5 @@
 import { Enum } from "./core-api-declarations";
-import CodeWriter from "./code-writer";
+import CodeWriter from "./type-definitions-writer";
 import { withTag } from "./api-types";
 import { mapType } from "./types-mapping";
 import { ApiGenerationOptions } from "./types";
