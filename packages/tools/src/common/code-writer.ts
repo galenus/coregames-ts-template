@@ -1,7 +1,7 @@
-export default class CodeWriter {
+export default abstract class CodeWriter {
     protected readonly code: (string | CodeWriter)[] = [];
 
-    constructor(
+    protected constructor(
         protected readonly nestedIndent?: string,
         public readonly firstLine?: string,
         protected readonly lastLine?: string,
@@ -12,16 +12,16 @@ export default class CodeWriter {
         if (firstLine) this.code.push(firstLine);
     }
 
-    protected createNew(
+    protected abstract createNew(
         nestedIndent?: string,
         firstLine?: string,
         lastLine?: string,
         contentPrefix?: string,
         wrapWithNewLines?: boolean,
         removeEmpty?: boolean,
-    ): this {
-        return new CodeWriter(nestedIndent, firstLine, lastLine, contentPrefix, wrapWithNewLines, removeEmpty) as this;
-    }
+    ): this;
+
+    protected abstract sectionName(name?: string): string | undefined;
 
     add(...codeLines: (string | false)[]): this {
         this.code.push(...codeLines.filter(item => !!item).map(l => `${l}`));
@@ -31,7 +31,7 @@ export default class CodeWriter {
     section(name?: string, wrapWithNewLines = false): this {
         const section = this.createNew(
             "",
-            typeof name === "string" ? `// ${name}` : undefined,
+            this.sectionName(name),
             undefined,
             "",
             wrapWithNewLines,
@@ -45,13 +45,13 @@ export default class CodeWriter {
         return this.section().add(...lines);
     }
 
-    scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}"): this {
+    scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}", wrapWithNewLines = false): this {
         const scopeBlock = this.createNew(
             this.nestedIndent,
             scopeDeclarationFirstLine,
             lastScopeLine || undefined,
             undefined,
-            true,
+            wrapWithNewLines,
         );
         this.code.push(scopeBlock);
 

@@ -1,163 +1,523 @@
+// eslint-disable-next-line max-classes-per-file
 import generateObjectId from "./id-generation";
 import CodeWriter from "../code-writer";
+import { Maybe } from "../types";
 
-type TypedObject<Name extends string, T> = { typeName: Name } & (T extends object ? T : { value: T });
+class TreeWriter extends CodeWriter {
+    constructor(
+        firstLine?: string,
+        lastLine?: string,
+    ) {
+        super("  ", firstLine, lastLine, "", false, false);
+    }
 
-abstract class TreeNodeChild<Name extends string, T> {
-    protected constructor(
-        private readonly name: Name,
-        private readonly value?: T,
+    protected createNew(
+        nestedIndent?: string,
+        firstLine?: string,
+        lastLine?: string,
+    ): this {
+        return new TreeWriter(firstLine, lastLine) as this;
+    }
+
+    protected sectionName(): string | undefined {
+        return "";
+    }
+}
+
+const ORDERED_NODE_NAMES = {
+    __UNKNOWN__: -1,
+    Id: 0,
+    Name: 1,
+    RootId: 2,
+    Transform: 20,
+    ParentId: 30,
+    Objects: 40,
+    ChildIds: 40,
+    UnregisteredParameters: 50,
+    Collidable_v2: 60,
+    Visible_v2: 70,
+    CameraCollidable: 80,
+    EditorIndicatorVisibility: 90,
+    Folder: 1000,
+    NetworkContext: 1100,
+    Script: 1200,
+    ScriptAsset: 1210,
+    Location: 2010,
+    X: 2011,
+    Y: 2012,
+    Z: 2013,
+    Rotation: 2020,
+    Pitch: 2021,
+    Yaw: 2022,
+    Roll: 2023,
+    Scale: 2030,
+    Overrides: 5000,
+    String: 5100,
+    Float: 5100,
+    Int: 5100,
+    Bool: 5100,
+    AssetReference: 5100,
+    Color: 5200,
+    R: 5201,
+    G: 5202,
+    B: 5203,
+    A: 5204,
+    IsGroup: 1010,
+    IsFilePartition: 1010,
+    FilePartitionName: 1020,
+    Value: 2000,
+};
+
+type NodeName = keyof typeof ORDERED_NODE_NAMES;
+
+type SimpleNodeValue = string | number | boolean | unknown;
+type NestedNodeValue = TreeNode<NodeName> | Maybe<TreeNode<NodeName>>[] | unknown;
+type NodeValue = SimpleNodeValue | NestedNodeValue;
+
+interface TreeNode<Name extends NodeName, T extends NodeValue = unknown> {
+    name: Name;
+    value?: T;
+}
+
+abstract class TreeNodeImpl<Name extends NodeName, T extends NodeValue = unknown> implements TreeNode<Name, T> {
+    constructor(
+        readonly name: Name,
+        readonly value?: T,
     ) {
     }
 
-    write(codeWrite: CodeWriter) {
-        if ()
+    abstract write(scopeWriter: CodeWriter, rootLevelWriter: CodeWriter): void;
+
+    get order() {
+        return ORDERED_NODE_NAMES[this.name];
     }
 }
 
-type Location = TypedObject<"Location", {
-    x?: number;
-    y?: number;
-    z?: number;
-}>;
-
-type Rotation = TypedObject<"Rotation", {
-    pitch?: number;
-    yaw?: number;
-    roll?: number;
-}>;
-
-const DEFAULT_ROTATION: Rotation = {
-    typeName: "Rotation", pitch: 0, yaw: 0, roll: 0,
-};
-
-type Scale = TypedObject<"Scale", {
-    x: number | 1;
-    y: number | 1;
-    z: number | 1;
-}>;
-
-const DEFAULT_SCALE: Scale = {
-    typeName: "Scale", x: 1, y: 1, z: 1,
-};
-
-type Transform = TypedObject<"Transform", {
-    location: Location;
-    rotation: Rotation;
-    scale: Scale;
-}>;
-
-const DEFAULT_TRANSFORM: Transform = {
-    typeName: "Transform",
-    location: { typeName: "Location" },
-    rotation: { typeName: "Rotation" },
-    scale: { ...DEFAULT_SCALE },
-};
-
-type PropertyType = "Int" | "Float" | "Bool" | "String" | "Color" | "AssetReference" | "Rotation";
-
-function typed<Name extends string, T>(typeName: Name, templateValue: T): TypedObject<Name, T> {
-    return {
-        typeName,
-        ...(typeof templateValue === "object" ? templateValue : { value: templateValue }),
-    } as TypedObject<Name, T>;
+interface SimpleNode<Name extends NodeName, T extends SimpleNodeValue> extends TreeNode<Name, T> {
 }
 
-const TypeTemplates = {
-    Int: typed("Int", 0),
-    Float: typed("Float", 0),
-    Bool: typed("Bool", false),
-    String: typed("String", ""),
-    Color: typed("Color", {
-        color: {
-            r: 0, g: 0, b: 0, a: 0,
-        },
-    }),
-    AssetReference: typed("AssetReference", { id: "0" }),
-    Rotation: DEFAULT_ROTATION,
-};
+class SimpleNodeImpl<Name extends NodeName, T extends SimpleNodeValue>
+    extends TreeNodeImpl<Name, T>
+    implements SimpleNode<Name, T> {
+    write(scopeWriter: CodeWriter) {
+        if (!this.value) return;
 
-type TemplateType<K extends keyof typeof TypeTemplates> = typeof TypeTemplates[K];
+        scopeWriter.add(`${this.name}: "${this.value}"`);
+    }
+}
 
-abstract class Property<T extends PropertyType> {
+function simpleNode<Name extends NodeName, T extends SimpleNodeValue>(
+    name: Name,
+    value?: T,
+): SimpleNodeImpl<Name, T> | undefined {
+    return value ? new SimpleNodeImpl<Name, T>(name, value) : undefined;
+}
+
+interface ContainerNode<Name extends NodeName, T extends NestedNodeValue> extends TreeNode<Name, T> {
+}
+
+class ContainerNodeImpl<Name extends NodeName, T extends NestedNodeValue>
+    extends TreeNodeImpl<Name, T>
+    implements ContainerNode<Name, T> {
+    write(scopeWriter: CodeWriter, rootLevelWriter: CodeWriter): void {
+        this.writeContainerNode(scopeWriter, rootLevelWriter);
+    }
+
+    protected writeContainerNode(scopeWriter: CodeWriter, rootLevelWriter: CodeWriter) {
+        const scope = scopeWriter.scope(`${this.name} {`);
+        if (Array.isArray(this.value)) {
+            (this.value as Maybe<TreeNodeImpl<NodeName>>[])
+                .filter(node => typeof node !== "undefined" && node !== null)
+                .sort((first, second) => first!.order - second!.order)
+                .forEach(node => node!.write(scope, rootLevelWriter));
+        } else if (this.value instanceof TreeNodeImpl) {
+            this.value.write(scope, rootLevelWriter);
+        }
+
+        return scope;
+    }
+}
+
+function containerNode<Name extends NodeName, T extends Maybe<TreeNodeImpl<NodeName>>[]>(name: Name, ...value: T) {
+    return new ContainerNodeImpl<Name, T>(name, value);
+}
+
+type RootLevelNodeDef = RootLevelNode<Maybe<TreeNodeImpl<NodeName>>[]>;
+type RootLevelNodeChildren = RootLevelNodeDef[];
+
+abstract class RootLevelNode<T extends Maybe<TreeNodeImpl<NodeName>>[]> extends ContainerNodeImpl<"Objects", T> {
     protected constructor(
-        private readonly name: string,
-        private readonly namePrefix: string,
-        private readonly value: TemplateType<T>,
+        readonly id: string,
+        readonly children: RootLevelNodeChildren,
+        value: T,
+        parentId?: string,
     ) {
+        super("Objects", value ?? []);
+        this.value!.unshift(simpleNode("Id", id));
+        if (parentId) {
+            this.value!.push(simpleNode("ParentId", parentId));
+        }
+    }
+
+    write(scopeWriter: CodeWriter, rootLevelWriter: CodeWriter) {
+        scopeWriter.add(`ChildIds: ${this.id}`);
+        const thisNodeScope = super.writeContainerNode(rootLevelWriter, rootLevelWriter);
+        this.children.forEach(node => node.write(thisNodeScope, rootLevelWriter));
     }
 }
 
-class BuiltInProperty<T extends PropertyType = "String"> extends Property<T> {
-    constructor(name: string, value: TemplateType<T>) {
-        super(name, "pb:", value);
+type Coordinates = [
+    Maybe<SimpleNodeImpl<"X", number>>,
+    Maybe<SimpleNodeImpl<"Y", number>>,
+    Maybe<SimpleNodeImpl<"Z", number>>,
+];
+
+class CoordinatesNode<Name extends NodeName> extends ContainerNodeImpl<Name, Coordinates> {
+    constructor(name: Name, x?: number, y?: number, z?: number) {
+        super(name, [
+            simpleNode("X", x),
+            simpleNode("Y", y),
+            simpleNode("Z", z),
+        ]);
     }
 }
 
-class CustomProperty<T extends PropertyType = "String"> extends Property<T> {
-    constructor(name: string, value: TemplateType<T>) {
-        super(name, "cs:", value);
+class Location extends CoordinatesNode<"Location"> {
+    constructor(x?: number, y?: number, z?: number) {
+        super("Location", x, y, z);
     }
 }
 
-type StringValue = TypedObject<"Value", string>;
-
-interface ScriptAsset {
-    id: string;
+class Scale extends CoordinatesNode<"Scale"> {
+    constructor(x: number, y: number, z: number) {
+        super("Scale", x, y, z);
+    }
 }
 
-interface TreeNode {
+class Rotation extends ContainerNodeImpl<"Rotation", [
+    Maybe<SimpleNodeImpl<"Pitch", number>>,
+    Maybe<SimpleNodeImpl<"Yaw", number>>,
+    Maybe<SimpleNodeImpl<"Roll", number>>,
+]> {
+    constructor(pitch?: number, yaw?: number, roll?: number) {
+        super("Rotation", [
+            simpleNode("Pitch", pitch),
+            simpleNode("Yaw", yaw),
+            simpleNode("Roll", roll),
+        ]);
+    }
+}
+
+class Transform extends ContainerNodeImpl<"Transform", [
+    Location,
+    Rotation,
+    Scale,
+]> {
+    constructor(value: [Location, Rotation, Scale]) {
+        super("Transform", value);
+    }
+}
+
+const DEFAULT_LOCATION = new Location();
+const DEFAULT_ROTATION = new Rotation();
+const DEFAULT_SCALE = new Scale(1, 1, 1);
+
+const DEFAULT_TRANSFORM = new Transform([DEFAULT_LOCATION, DEFAULT_ROTATION, DEFAULT_SCALE]);
+
+class Color extends ContainerNodeImpl<"Color", [
+    Maybe<SimpleNodeImpl<"R", number>>,
+    Maybe<SimpleNodeImpl<"G", number>>,
+    Maybe<SimpleNodeImpl<"B", number>>,
+    Maybe<SimpleNodeImpl<"A", number>>,
+]> {
+    constructor(r?: number, g?: number, b?: number, a?: number) {
+        super("Color", [
+            simpleNode("R", r),
+            simpleNode("G", g),
+            simpleNode("B", b),
+            simpleNode("A", a),
+        ]);
+    }
+}
+
+class AssetReference extends ContainerNodeImpl<"AssetReference", SimpleNodeImpl<"Id", string>> {
+    constructor(id: string) {
+        super("AssetReference", simpleNode("Id", id));
+    }
+}
+
+class StringNode<Name extends NodeName> extends SimpleNodeImpl<Name, string> {
+    constructor(name: Name, value: string) {
+        super(name, StringNode.addQuotesToString(value));
+    }
+
+    private static addQuotesToString(value: string) {
+        // eslint-disable-next-line @typescript-eslint/quotes
+        let updatedValue = value.startsWith('"') ? value : `"${value}`;
+        // eslint-disable-next-line @typescript-eslint/quotes
+        updatedValue = updatedValue.endsWith('"') ? updatedValue : `${updatedValue}"`;
+        return updatedValue;
+    }
+}
+
+function stringNode<Name extends NodeName>(name: Name, value?: string): Maybe<StringNode<Name>> {
+    return typeof value === "string" ? new StringNode<Name>(name, value) : undefined;
+}
+
+type PropertyValue =
+    | SimpleNodeImpl<"Int" | "Float", number>
+    | StringNode<"String">
+    | SimpleNodeImpl<"Bool", boolean>
+    | Color
+    | AssetReference
+    | Rotation;
+type PropertyNamePrefix = "pb:" | "cs:";
+
+abstract class Property<T extends PropertyValue> extends ContainerNodeImpl<"Overrides", [
+    SimpleNodeImpl<"Name", string>,
+    PropertyValue,
+]> {
+    protected constructor(namePrefix: PropertyNamePrefix, propertyName: string, value: T) {
+        super("Overrides", [
+            simpleNode("Name", `"${namePrefix}${propertyName}"`)!,
+            value,
+        ]);
+    }
+}
+
+class BuiltInProperty<T extends PropertyValue> extends Property<T> {
+    constructor(propertyName: string, value: T) {
+        super("pb:", propertyName, value);
+    }
+}
+
+class CustomProperty<T extends PropertyValue> extends Property<T> {
+    constructor(propertyName: string, value: T) {
+        super("cs:", propertyName, value);
+    }
+}
+
+class Properties extends ContainerNodeImpl<"UnregisteredParameters", BuiltInProperty<PropertyValue>[] | CustomProperty<PropertyValue>[]> {
+    constructor(value: BuiltInProperty<PropertyValue>[] | CustomProperty<PropertyValue>[]) {
+        super("UnregisteredParameters", value);
+    }
+}
+
+const DEFAULT_PROPERTIES = new Properties([]);
+
+class StringValue extends StringNode<"Value"> {
+    constructor(value: string) {
+        super("Value", value);
+    }
+}
+
+const DEFAULT_COLLIDABLE = new ContainerNodeImpl("Collidable_v2", new StringValue("mc:ecollisionsetting:inheritfromparent"));
+const DEFAULT_VISIBLE = new ContainerNodeImpl("Visible_v2", new StringValue("mc:evisibilitysetting:inheritfromparent"));
+const DEFAULT_CAMERA_COLLIDABLE = new ContainerNodeImpl("CameraCollidable", new StringValue("mc:ecollisionsetting:inheritfromparent"));
+const DEFAULT_EDITOR_INDICATOR_VISIBILITY = new ContainerNodeImpl("EditorIndicatorVisibility", new StringValue("mc:eindicatorvisibility:visiblewhenselected"));
+
+type Collidable = typeof DEFAULT_COLLIDABLE;
+type Visible = typeof DEFAULT_VISIBLE;
+type CameraCollidable = typeof DEFAULT_CAMERA_COLLIDABLE;
+type EditorIndicatorVisibility = typeof DEFAULT_EDITOR_INDICATOR_VISIBILITY;
+
+interface RootLevelNodeParams {
     id: string;
     name: string;
     parentId?: string;
-    transform: TypedObject<"Transform", Transform>;
-    children?: TreeNode[];
-    unregisteredParameters?: Property<any>[];
-    collidable?: StringValue;
-    visible?: StringValue;
-    cameraCollidable?: StringValue;
-    editorIndicatorVisibility?: StringValue;
-    script?: ScriptAsset;
+    transform?: Transform;
+    properties?: Properties;
+    collidable?: Collidable;
+    visible?: Visible;
+    cameraCollidable?: CameraCollidable;
+    editorIndicatorVisibility?: EditorIndicatorVisibility;
+    children?: RootLevelNodeChildren;
+    additionalNested?: Maybe<TreeNodeImpl<NodeName>>[]
 }
 
-const DEFAULT_COLLIDABLE: StringValue = { typeName: "Value", value: "mc:ecollisionsetting:inheritfromparent" };
-const DEFAULT_VISIBLE: StringValue = { typeName: "Value", value: "mc:evisibilitysetting:inheritfromparent" };
-const DEFAULT_CAMERA_COLLIDABLE: StringValue = { typeName: "Value", value: "mc:ecollisionsetting:inheritfromparent" };
-const DEFAULT_EDITOR_INDICATOR_VISIBILITY: StringValue = { typeName: "Value", value: "mc:eindicatorvisibility:visiblewhenselected" };
+class GenericRootLevelNode extends RootLevelNode<Maybe<TreeNodeImpl<NodeName>>[]> {
+    constructor({
+        id,
+        name,
+        parentId,
+        transform,
+        properties,
+        collidable,
+        visible,
+        cameraCollidable,
+        editorIndicatorVisibility,
+        children,
+        additionalNested,
+    }: RootLevelNodeParams) {
+        super(
+            id,
+            children ?? [],
+            [
+                stringNode("Name", name),
+                transform ?? DEFAULT_TRANSFORM,
+                properties ?? DEFAULT_PROPERTIES,
+                collidable ?? DEFAULT_COLLIDABLE,
+                visible ?? DEFAULT_VISIBLE,
+                cameraCollidable ?? DEFAULT_CAMERA_COLLIDABLE,
+                editorIndicatorVisibility,
+                ...(additionalNested || []),
+            ],
+            parentId,
+        );
+    }
 
-function writeObjectProperties<Name extends string, T extends TypedObject<Name, unknown>>(obj: T) {
-    const { typeName, write, value } = obj as any;
-    const objectEntries =
-}
-function writeTransform(transform: TypedObject<"Transform", Transform>, indent: string) {
-    return `Transform {
-${Obje}
-}`;
+    addChild(childNode: GenericRootLevelNode) {
+        this.children.push(childNode);
+    }
 }
 
-class TreeNodeImpl implements TreeNode {
+class Script extends GenericRootLevelNode {
+    constructor(scriptId: number, nodeParams: RootLevelNodeParams) {
+        super({
+            ...nodeParams,
+            editorIndicatorVisibility: nodeParams.editorIndicatorVisibility ?? DEFAULT_EDITOR_INDICATOR_VISIBILITY,
+            additionalNested: [
+                ...(nodeParams.additionalNested || []),
+                containerNode("Script", containerNode("ScriptAsset", simpleNode("Id", scriptId))),
+            ],
+        });
+    }
+}
+
+class Folder extends GenericRootLevelNode {
+    constructor(nodeParams: RootLevelNodeParams) {
+        super({
+            ...nodeParams,
+            editorIndicatorVisibility: nodeParams.editorIndicatorVisibility ?? DEFAULT_EDITOR_INDICATOR_VISIBILITY,
+            additionalNested: [
+                ...(nodeParams.additionalNested || []),
+                containerNode("Folder",
+                    simpleNode("IsFilePartition", true),
+                    stringNode("FilePartitionName", nodeParams.name)),
+            ],
+        });
+    }
+}
+
+const ROOT_NODE_NAME = "Root";
+
+class TreeRoot extends GenericRootLevelNode {
+    constructor(id: string) {
+        super({
+            id,
+            name: ROOT_NODE_NAME,
+            additionalNested: [
+                containerNode("Folder"),
+            ],
+        });
+    }
+
+    write(rootLevelWriter: CodeWriter) {
+        rootLevelWriter.add(
+            `Name: "${ROOT_NODE_NAME}"`,
+            `RootId: ${this.id}`,
+        );
+        super.write(rootLevelWriter, rootLevelWriter);
+    }
+}
+
+class RootLevelNodeBuilder {
+    private readonly params: Partial<RootLevelNodeParams> = {};
+
     constructor(
-        public readonly id: string,
-        public readonly name: string,
-        public readonly collidable: Value,
-        public readonly visible: Value,
-        public readonly cameraCollidable: Value,
-        public readonly editorIndicatorVisibility: Value,
-        public readonly transform: Transform,
-        public readonly parentId?: string,
-        public readonly children?: TreeNode[],
-        public readonly unregisteredParameters?: Property<any>[],
-        public readonly script?: ScriptAsset,
+        params: Partial<RootLevelNodeParams>,
+        private readonly factory: (nodeParams: RootLevelNodeParams) => GenericRootLevelNode,
+        readonly existingNode?: RootLevelNodeDef,
     ) {
+        this.params = params;
     }
 
-    serialize(target: string[]) {
-        const contents: string[] = [];
-        const thisContents = `
-Objects {
-  Id: ${this.id}
-  Name: "${this.name}"
-  ${writeTransform(this.transform, "  ")}
-}`;
+    static from(node: RootLevelNodeDef): RootLevelNodeBuilder {
+        const params: RootLevelNodeParams = node.value!.reduce(
+            (aggr, currentNode) => {
+                switch (currentNode?.name) {
+                    case "Id":
+                        return { ...aggr, id: currentNode.value as string };
+                    case "Name":
+                        return { ...aggr, name: currentNode.value as string };
+                    case "ParentId":
+                        return { ...aggr, parentId: currentNode.value as string };
+                    case "Transform":
+                        return { ...aggr, transform: currentNode as Transform };
+                    case "UnregisteredParameters":
+                        return { ...aggr, properties: currentNode as Properties };
+                    case "Collidable_v2":
+                        return { ...aggr, collidable: currentNode as Collidable };
+                    case "Visible_v2":
+                        return { ...aggr, visible: currentNode as Visible };
+                    case "CameraCollidable":
+                        return { ...aggr, cameraCollidable: currentNode as CameraCollidable };
+                    case "EditorIndicatorVisibility":
+                        return { ...aggr, editorIndicatorVisibility: currentNode as EditorIndicatorVisibility };
+                    default:
+                        if (currentNode) {
+                            return {
+                                ...aggr,
+                                additionalNested: [
+                                    ...(aggr.additionalNested || []),
+                                    currentNode,
+                                ],
+                            };
+                        }
+
+                        return aggr;
+                }
+            },
+            {} as RootLevelNodeParams,
+        );
+
+        params.children = node.children;
+
+        return new RootLevelNodeBuilder(params, p => new GenericRootLevelNode(p), node);
     }
+}
+
+type BuilderCallback = (folderBuilder: RootLevelNodeBuilder) => RootLevelNodeBuilder;
+
+// eslint-disable-next-line import/prefer-default-export
+export class TreeBuilder {
+    private readonly builders: RootLevelNodeBuilder[] = [];
+
+    constructor(private readonly root: TreeRoot) {
+        this.builders = root.children.map(RootLevelNodeBuilder.from);
+    }
+
+    static from(root: TreeRoot): TreeBuilder {
+        return new TreeBuilder(root);
+    }
+
+    static new(): TreeBuilder {
+        return new TreeBuilder(new TreeRoot(generateObjectId()));
+    }
+
+    update(selector: (node: RootLevelNodeDef) => boolean, configure: BuilderCallback): boolean {
+        const builderIndex = this.builders.filter(b => b.existingNode).findIndex(b => selector(b.existingNode!));
+        if (builderIndex < 0) return false;
+
+        this.builders[builderIndex] = configure(this.builders[builderIndex]);
+        return true;
+    }
+
+    withFolder(folderName: string, configure: BuilderCallback): TreeBuilder {
+        const folderBuilder = configure(
+            new RootLevelNodeBuilder({
+                id: generateObjectId(),
+                parentId: this.root.id,
+            },
+            params => new Folder(params)),
+        );
+        this.builders.push(folderBuilder);
+        return this;
+    }
+}
+
+export function serializeTree(tree: TreeRoot) {
+    const rootLevelWriter = new TreeWriter();
+    tree.write(rootLevelWriter);
+    return rootLevelWriter.toString();
 }

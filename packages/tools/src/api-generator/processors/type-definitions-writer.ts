@@ -34,13 +34,21 @@ export default class TypeDefinitionsWriter extends CodeWriter {
         ) as this;
     }
 
+    protected sectionName(name?: string) {
+        return typeof name === "string" ? `// ${name}` : undefined;
+    }
+
+    scope(scopeDeclarationFirstLine: string, lastScopeLine: string | false = "}"): this {
+        return super.scope(scopeDeclarationFirstLine, lastScopeLine, true);
+    }
+
     comment(addComments: (commentsBlock: CodeWriter) => void): this {
         if (this.code[0] instanceof CodeWriter && this.code[0].firstLine === FIRST_COMMENT_LINE) {
             addComments(this.code[0]);
             return this;
         }
 
-        const commentBlock = new CodeWriter("", FIRST_COMMENT_LINE, " */", " * ");
+        const commentBlock = this.createNew("", FIRST_COMMENT_LINE, " */", " * ");
         this.code.unshift(commentBlock);
         addComments(commentBlock);
         return this;

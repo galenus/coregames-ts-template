@@ -4,3 +4,5 @@ export interface Project {
         outDir?: string,
     }
 }
+
+export type Maybe<T> = T | undefined;
