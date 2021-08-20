@@ -14,7 +14,6 @@ import {
 } from "typescript-to-lua";
 import * as ts from "typescript";
 
-const SCRIPTS_ROOT_OBJECT_NAME = "__ScriptsRoot";
 const SCRIPTS_ROOT_VAR_NAME = "__SCRIPTS_ROOT";
 const REQUIRE_KEYWORD = "require";
 const NO_SELF_ARG_FUNCTION_NAMES = ["Tick"];
@@ -41,7 +40,7 @@ function patchGetCompilerOptions(program: ts.Program) {
     return patchedProgram;
 }
 
-function addScriptsRootIfNecessary(file: tstl.File) {
+function addScriptsRootIfNecessary(file: tstl.File, libRootName: string) {
     if (file.luaLibFeatures.size === 0
         && file.statements.findIndex(
             st => tstl.isVariableDeclarationStatement(st)
@@ -53,7 +52,7 @@ function addScriptsRootIfNecessary(file: tstl.File) {
     ) return;
 
     // eslint-disable-next-line no-param-reassign
-    file.trivia += `local ${SCRIPTS_ROOT_VAR_NAME} = World.FindObjectByName("${SCRIPTS_ROOT_OBJECT_NAME}")\n`;
+    file.trivia += `local ${SCRIPTS_ROOT_VAR_NAME} = World.FindObjectByName("${libRootName}")\n`;
 }
 
 const LUA_LIB_VAR = "__LUA_LIB";
@@ -72,12 +71,12 @@ function addLuaLibRequireIfNecessary(file: tstl.File) {
 }
 
 class AdapterPrinter extends LuaPrinter {
-    constructor(emitHost: EmitHost, program: ts.Program, fileName: string) {
+    constructor(private readonly libRootName: string, emitHost: EmitHost, program: ts.Program, fileName: string) {
         super(emitHost, patchGetCompilerOptions(program), fileName);
     }
 
     public print(file: tstl.File) {
-        addScriptsRootIfNecessary(file);
+        addScriptsRootIfNecessary(file, this.libRootName);
         addLuaLibRequireIfNecessary(file);
 
         const sourceNode = this.concatNodes(file.trivia, ...this.printStatementArray(file.statements));
@@ -135,13 +134,13 @@ class AdapterPrinter extends LuaPrinter {
     }
 }
 
-function invokeAdapterPrinter(
-    program: ts.Program,
-    emitHost: EmitHost,
-    fileName: string,
-    file: tstl.File,
-) {
-    return new AdapterPrinter(emitHost, program, fileName).print(file);
+function createAdapterPrinter(libRootName: string) {
+    return (
+        program: ts.Program,
+        emitHost: EmitHost,
+        fileName: string,
+        file: tstl.File,
+    ) => new AdapterPrinter(libRootName, emitHost, program, fileName).print(file);
 }
 
 function transformCallExpression(node: ts.CallExpression, context: TransformationContext) {
@@ -167,11 +166,15 @@ function transformCallExpression(node: ts.CallExpression, context: Transformatio
     return context.superTransformExpression(adaptedNode);
 }
 
-const plugin: tstl.Plugin = {
+interface PluginArguments {
+    libRootName: string;
+}
+
+const plugin = ({ libRootName }: PluginArguments) => ({
     visitors: {
         [ts.SyntaxKind.CallExpression]: transformCallExpression,
     },
-    printer: invokeAdapterPrinter,
-};
+    printer: createAdapterPrinter(libRootName),
+});
 
 export default plugin;
