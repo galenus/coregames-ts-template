@@ -1,6 +1,4 @@
-import IDGen from "flake-idgen";
-
-const idFormat = require("biguint-format");
+import generateObjectId from "./id-generation";
 
 const SERIALIZATION_VERSION = 95;
 
@@ -12,20 +10,13 @@ interface AssetData {
     name: string;
 }
 
-const idGen = new IDGen();
-
-function generateAssetId(): string {
-    const idBytes = idGen.next();
-    return idFormat(idBytes);
-}
-
-export default function createAssetDefinition(type: PlatformAssetType, data: AssetData) {
+export function createAssetDefinition(type: PlatformAssetType, data: AssetData) {
     const { name } = data;
     // eslint-disable-next-line default-case
     switch (type) {
         case PlatformAssetType.script:
             return `Assets {
-  Id: ${generateAssetId()}
+  Id: ${generateObjectId()}
   Name: "${name}"
   PlatformAssetType: ${type}
   TextAsset {

@@ -1,8 +1,9 @@
 import fs from "fs";
 import path from "path";
-import { Arguments, CommandModule } from "yargs";
-import { assertPathExistence, loadTsProject, processFilesRecursively } from "../common/filesystem";
-import createAssetDefinition, { PlatformAssetType } from "../common/pbt-serialization";
+import { Arguments, CommandBuilder, CommandModule } from "yargs";
+import { loadTsProject, processFilesRecursively } from "../common/filesystem";
+import { withConfigOption } from "../common/yargs";
+import { PlatformAssetType, createAssetDefinition } from "../common/pbt-serialization";
 
 const ASSET_FILE_EXTENSION = ".asset.pbt";
 
@@ -81,25 +82,17 @@ function syncFiles(args: SyncArguments) {
 }
 
 const yargsModule: CommandModule<{}, SyncArguments> = {
-    builder: yargs => yargs
-        .options({
-            config: {
-                type: "string",
-                normalize: true,
-                demandOption: true,
-                describe: "path to the tsconfig.json file used by typescript-to-lua for Lua compilation",
-                coerce: (configPath: string) => {
-                    assertPathExistence(configPath);
-                    return configPath;
+    builder: (
+        yargs => withConfigOption(yargs)
+            .options({
+                direction: {
+                    choices: ["ts2script", "script2ts", "both"] as SyncDirection[],
+                    describe: "direction of the files synchronization",
+                    demandOption: true,
                 },
-            },
-            direction: {
-                choices: ["ts2script", "script2ts", "both"] as SyncDirection[],
-                describe: "direction of the files synchronization",
-                demandOption: true,
-            },
-        })
-        .help(),
+            })
+            .help()
+    ) as CommandBuilder<{}, SyncArguments>,
     handler: (argv: Arguments<SyncArguments>) => syncFiles(argv),
 };
 
