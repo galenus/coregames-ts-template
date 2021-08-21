@@ -1,14 +1,16 @@
 // eslint-disable-next-line max-classes-per-file
 import generateObjectId from "./id-generation";
 import CodeWriter from "../code-writer";
-import { Maybe } from "../types";
+import { Maybe, Nullable } from "../types";
+
+const NESTED_NODES_INDENT = "  ";
 
 class TreeWriter extends CodeWriter {
     constructor(
         firstLine?: string,
         lastLine?: string,
     ) {
-        super("  ", firstLine, lastLine, "", false, false);
+        super(NESTED_NODES_INDENT, firstLine, lastLine, "", false, false);
     }
 
     protected createNew(
@@ -70,6 +72,10 @@ const ORDERED_NODE_NAMES = {
 
 type NodeName = keyof typeof ORDERED_NODE_NAMES;
 
+function isNodeName(value?: string): value is NodeName {
+    return typeof value === "string" && !!(ORDERED_NODE_NAMES as any)[value];
+}
+
 type SimpleNodeValue = string | number | boolean | unknown;
 type NestedNodeValue = TreeNode<NodeName> | Maybe<TreeNode<NodeName>>[] | unknown;
 type NodeValue = SimpleNodeValue | NestedNodeValue;
@@ -90,6 +96,16 @@ abstract class TreeNodeImpl<Name extends NodeName, T extends NodeValue = unknown
 
     get order() {
         return ORDERED_NODE_NAMES[this.name];
+    }
+}
+
+class UnknownNode extends TreeNodeImpl<"__UNKNOWN__"> {
+    constructor(public readonly unknownName: string, value: string[]) {
+        super("__UNKNOWN__", value);
+    }
+
+    write(scopeWriter: CodeWriter, rootLevelWriter: CodeWriter): void {
+        scopeWriter.add(...this.value as string[]);
     }
 }
 
@@ -305,16 +321,10 @@ class Properties extends ContainerNodeImpl<"UnregisteredParameters", BuiltInProp
 
 const DEFAULT_PROPERTIES = new Properties([]);
 
-class StringValue extends StringNode<"Value"> {
-    constructor(value: string) {
-        super("Value", value);
-    }
-}
-
-const DEFAULT_COLLIDABLE = new ContainerNodeImpl("Collidable_v2", new StringValue("mc:ecollisionsetting:inheritfromparent"));
-const DEFAULT_VISIBLE = new ContainerNodeImpl("Visible_v2", new StringValue("mc:evisibilitysetting:inheritfromparent"));
-const DEFAULT_CAMERA_COLLIDABLE = new ContainerNodeImpl("CameraCollidable", new StringValue("mc:ecollisionsetting:inheritfromparent"));
-const DEFAULT_EDITOR_INDICATOR_VISIBILITY = new ContainerNodeImpl("EditorIndicatorVisibility", new StringValue("mc:eindicatorvisibility:visiblewhenselected"));
+const DEFAULT_COLLIDABLE = new ContainerNodeImpl("Collidable_v2", stringNode("Value", "mc:ecollisionsetting:inheritfromparent"));
+const DEFAULT_VISIBLE = new ContainerNodeImpl("Visible_v2", stringNode("Value", "mc:evisibilitysetting:inheritfromparent"));
+const DEFAULT_CAMERA_COLLIDABLE = new ContainerNodeImpl("CameraCollidable", stringNode("Value", "mc:ecollisionsetting:inheritfromparent"));
+const DEFAULT_EDITOR_INDICATOR_VISIBILITY = new ContainerNodeImpl("EditorIndicatorVisibility", stringNode("Value", "mc:eindicatorvisibility:visiblewhenselected"));
 
 type Collidable = typeof DEFAULT_COLLIDABLE;
 type Visible = typeof DEFAULT_VISIBLE;
@@ -521,3 +531,114 @@ export function serializeTree(tree: TreeRoot) {
     tree.write(rootLevelWriter);
     return rootLevelWriter.toString();
 }
+
+function getUnindentedLine(currentLine: string, indentationLevel: number) {
+    return currentLine
+        .substr(indentationLevel * NESTED_NODES_INDENT.length);
+}
+
+const simpleNodeNameGroup = "simpleNodeName";
+const numericValueGroup = "numericValue";
+const stringValueGroup = "stringValue";
+
+interface SimpleNodeMatch {
+    groups?: {
+        [simpleNodeNameGroup]: string | undefined;
+        [numericValueGroup]: string | undefined;
+        [stringValueGroup]: string | undefined;
+    }
+}
+const simpleNodePattern = new RegExp(`\\s*(?<${simpleNodeNameGroup}>\\w+):\\s((?<${numericValueGroup}>-?\\d+(\\.\\d+)?)|(?<${stringValueGroup}>"\\w+([:\\s]+\\w+)*"))$`);
+
+function parseSimpleNode(currentLine: string, indentationLevel: number): Maybe<TreeNode<NodeName>> | false {
+    const simpleNodeMatch = getUnindentedLine(currentLine, indentationLevel)
+        .match(simpleNodePattern) as Nullable<SimpleNodeMatch>;
+    const simpleNodeName = simpleNodeMatch?.groups?.simpleNodeName;
+
+    if (typeof simpleNodeName !== "string") return false;
+
+    if (isNodeName(simpleNodeName)) {
+        const numericValue = simpleNodeMatch?.groups?.numericValue;
+        if (numericValue) {
+            return simpleNode(simpleNodeName, numericValue + 0);
+        }
+
+        const stringValue = simpleNodeMatch?.groups?.stringValue;
+        if (typeof stringValue === "string") {
+            return stringNode(simpleNodeName, stringValue);
+        }
+    }
+
+    return new UnknownNode(simpleNodeName,[currentLine]);
+}
+
+const containerNodeNameGroup = "containerNodeName";
+const containerNodeFirstLinePattern = new RegExp(`^(?<${containerNodeNameGroup}>\\w+)\\s{$`);
+const containerNodeLastLinePattern = new RegExp("^}$");
+interface ContainerNodeMatch {
+    groups?: {
+        [containerNodeNameGroup]: string | undefined;
+    }
+}
+
+function iterateOverContainerNodeLines(
+    nodesTextIterator: Iterator<string>,
+    indentationLevel: number,
+    lineCallback: (unindentedLine: string) => void,
+) {
+    let current = nodesTextIterator.next();
+    while (!current.done) {
+        const unindentedLine = getUnindentedLine(current.value, indentationLevel);
+        if (containerNodeLastLinePattern.test(unindentedLine)) break;
+
+        lineCallback(unindentedLine);
+
+        current = nodesTextIterator.next();
+    }
+}
+
+function parseRootLevelNode(nodesTextIterator: Iterator<string>) {
+    return undefined;
+}
+
+function parseKnownContainerNode(
+    containerName: NodeName,
+    nodesTextIterator: Iterator<string>,
+    indentationLevel: number,
+): ContainerNode<NodeName> {
+    switch (containerName) {
+        case "Objects":
+            return parseRootLevelNode(nodesTextIterator);
+    }
+}
+
+function parseContainerNode(currentLine: string, nodesTextIterator: Iterator<string>, indentationLevel: number): TreeNode<NodeName> | false {
+    const containerNodeMatch = getUnindentedLine(currentLine, indentationLevel)
+        .match(containerNodeFirstLinePattern) as Nullable<ContainerNodeMatch>;
+    const containerName = containerNodeMatch?.groups?.containerNodeName;
+
+    if (typeof containerName !== "string") return false;
+
+    if (!isNodeName(containerName)) {
+        const unknownNodeLines: string[] = [];
+        iterateOverContainerNodeLines(nodesTextIterator, indentationLevel, unknownNodeLines.push);
+        return new UnknownNode(containerName, unknownNodeLines);
+    }
+
+    return parseKnownContainerNode(containerName, nodesTextIterator, indentationLevel);
+}
+
+// export function parseTree(treeText: Iterable<string>) {
+//     const nodesTextIterator = treeText[Symbol.iterator]();
+//     let current = nodesTextIterator.next();
+//     while (!current.done) {
+//         const { value } = current;
+//         if (value.length > 0) {
+//
+//                 parseContainerNode(containerName, nodesTextIterator);
+//             }
+//         }
+//
+//         current = nodesTextIterator.next();
+//     }
+// }
